@@ -1,67 +1,97 @@
-from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
-import pandas as pd
-from io import StringIO
+#!/usr/bin/env python3
+"""
+Financial Data Scraper for Eastmoney Website
 
-URL = "https://emweb.securities.eastmoney.com/pc_hsf10/pages/index.html?type=web&code=SH605136&color=b#/cwfx"
+This script scrapes financial data from Eastmoney's website and exports it to Excel.
+"""
 
-def grab_htmls(urls):
-    htmls = {}
-    for url in urls:
-        htmls[url] = []
+import argparse
+import sys
+from pathlib import Path
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+from src.config import ScrapingConfig
+from src.scraper import FinancialDataScraper
+from src.utils import setup_logging
 
-        for url in urls:
-            while True:
-                page.goto(url)
-                htmls[url].append(page.content())
 
-                button = page.query_selector(".zyzb_table .next")
-                if button is None or not button.is_visible():
-                    break
+def parse_arguments() -> argparse.Namespace:
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(
+        description="Scrape financial data from Eastmoney website"
+    )
+    parser.add_argument(
+        "--stock-code",
+        default="SH605136",
+        help="Stock code to scrape (default: SH605136)"
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("build"),
+        help="Output directory (default: build)"
+    )
+    parser.add_argument(
+        "--output-file",
+        default="zyzb_table.xlsx",
+        help="Output filename (default: zyzb_table.xlsx)"
+    )
+    parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+        default="INFO",
+        help="Logging level (default: INFO)"
+    )
+    parser.add_argument(
+        "--log-file",
+        type=Path,
+        help="Log file path (optional)"
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        default=True,
+        help="Run browser in headless mode (default: True)"
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=10000,
+        help="Page timeout in milliseconds (default: 10000)"
+    )
+    
+    return parser.parse_args()
 
-                table_html = page.query_selector(".zyzb_table").inner_html()
-                button.click()
-                page.wait_for_function(
-                    """
-                        (oldHtml) => {
-                            const newHtml = document.querySelector(".zyzb_table").innerHTML;
-                            return oldHtml !== newHtml;
-                        }
-                    """,
-                    arg=table_html,
-                    timeout=1000
-                )
 
-        browser.close()
+def main() -> int:
+    """Main entry point"""
+    try:
+        args = parse_arguments()
+        
+        # Setup logging
+        setup_logging(args.log_level, args.log_file)
+        
+        # Create configuration
+        config = ScrapingConfig(
+            stock_code=args.stock_code,
+            output_dir=args.output_dir,
+            output_filename=args.output_file,
+            headless=args.headless,
+            timeout=args.timeout
+        )
+        
+        # Create and run scraper
+        scraper = FinancialDataScraper(config)
+        scraper.run()
+        
+        return 0
+        
+    except KeyboardInterrupt:
+        print("\nProcess interrupted by user")
+        return 1
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
 
-    return htmls
-
-def main():
-    htmls = grab_htmls([URL])
-
-    for url, pages in htmls.items():
-        tables = []
-
-        for i, page in enumerate(pages):
-            soup = BeautifulSoup(page, "lxml")
-
-            title = soup.select_one("title").text.strip()
-            print("TITLE:", title)
-
-            zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
-            df = pd.read_html(StringIO(str(zyzb_table)))[0]
-
-            if i != 0:
-                df = df.iloc[:, 1:]
-
-            tables.append(df)
-
-        df = pd.concat(tables, axis=1, ignore_index=True)
-        df.to_excel("build/zyzb_table.xlsx", index=False)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
