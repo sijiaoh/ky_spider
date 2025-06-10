@@ -27,13 +27,13 @@ class FinancialDataScraper:
         page.set_default_timeout(self.config.timeout)
         return browser, page
     
-    def _extract_page_data(self, html_content: str, page_index: int) -> pd.DataFrame:
-        """Extract table data from HTML content"""
+    def _extract_page_data(self, html_content: str, page_index: int) -> tuple[pd.DataFrame, str]:
+        """Extract table data and title from HTML content"""
         soup = BeautifulSoup(html_content, "lxml")
         
         title = soup.select_one("title")
-        if title:
-            logger.info(f"Processing page {page_index}: {title.text.strip()}")
+        page_title = title.text.strip() if title else f"Unknown_Page_{page_index}"
+        logger.info(f"Processing page {page_index}: {page_title}")
         
         zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
         if not zyzb_table:
@@ -50,7 +50,7 @@ class FinancialDataScraper:
         if page_index > 0:
             df = df.iloc[:, 1:]
         
-        return df
+        return df, page_title
     
     def _scrape_single_url(self, page: Page, url: str) -> List[str]:
         """Scrape all pages from a single URL"""
@@ -140,8 +140,11 @@ class FinancialDataScraper:
             page_tables = []
             
             # Process each page within the URL
+            page_title = None
             for i, html_content in enumerate(html_pages):
-                df = self._extract_page_data(html_content, i)
+                df, title = self._extract_page_data(html_content, i)
+                if page_title is None:
+                    page_title = title
                 page_tables.append(df)
             
             # Combine pages horizontally for this URL
@@ -151,10 +154,10 @@ class FinancialDataScraper:
                 logger.error(f"Critical error: Combined dataframe is empty for {url}")
                 raise RuntimeError(f"Final dataframe is empty for {url}")
             
-            # Add URL identifier column
-            url_combined_df.insert(0, 'Source_URL', url)
+            # Add Title identifier column instead of URL
+            url_combined_df.insert(0, 'Title', page_title)
             all_url_data.append(url_combined_df)
-            logger.info(f"Processed {len(page_tables)} pages from {url}")
+            logger.info(f"Processed {len(page_tables)} pages from {url} with title: {page_title}")
         
         # Combine all URLs vertically
         if not all_url_data:
