@@ -26,7 +26,8 @@ def main():
 
     zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
     df = pd.read_html(StringIO(str(zyzb_table)))[0]
-    print(df.to_string(index=False))
+
+    df.to_excel("build/zyzb_table.xlsx", index=False)
 
 if __name__ == "__main__":
     main()
