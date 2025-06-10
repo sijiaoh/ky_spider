@@ -59,10 +59,13 @@ class FinancialDataScraper:
         browser, page = self._setup_browser()
         
         try:
+            # Initial page load
+            logger.info(f"Loading initial page from {url}")
+            page.goto(url)
+            
             page_count = 0
             while True:
-                logger.info(f"Scraping page {page_count + 1} from {url}")
-                page.goto(url)
+                logger.info(f"Scraping page {page_count + 1}")
                 html_pages.append(page.content())
                 
                 # Check for next button
@@ -82,7 +85,7 @@ class FinancialDataScraper:
                 # Click next button
                 next_button.click()
                 
-                # Wait for table to update
+                # Wait for table to update (SPA content change)
                 page.wait_for_function(
                     """
                     (oldHtml) => {
