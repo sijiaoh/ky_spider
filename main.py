@@ -89,7 +89,8 @@ def main() -> int:
         print("\nProcess interrupted by user")
         return 1
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Critical Error: {e}", file=sys.stderr)
+        print("Process terminated due to data integrity failure", file=sys.stderr)
         return 1
 
 

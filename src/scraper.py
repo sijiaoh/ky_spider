@@ -42,10 +42,14 @@ class FinancialDataScraper:
             
             zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
             if not zyzb_table:
-                logger.warning(f"No table found on page {page_index}")
-                return pd.DataFrame()
+                logger.error(f"Critical error: No table found on page {page_index}")
+                raise RuntimeError(f"Table not found on page {page_index} - data integrity compromised")
             
             df = pd.read_html(StringIO(str(zyzb_table)))[0]
+            
+            if df.empty:
+                logger.error(f"Critical error: Empty table data on page {page_index}")
+                raise RuntimeError(f"Empty table data on page {page_index} - data integrity compromised")
             
             # Remove first column for non-first pages to avoid duplication
             if page_index > 0:
@@ -54,8 +58,8 @@ class FinancialDataScraper:
             return df
             
         except Exception as e:
-            logger.error(f"Failed to extract data from page {page_index}: {e}")
-            return pd.DataFrame()
+            logger.error(f"Critical error extracting data from page {page_index}: {e}")
+            raise RuntimeError(f"Data extraction failed on page {page_index}: {e}") from e
     
     def _scrape_single_url(self, url: str) -> List[str]:
         """Scrape all pages from a single URL"""
@@ -105,8 +109,8 @@ class FinancialDataScraper:
                     break
                     
         except Exception as e:
-            logger.error(f"Error during scraping: {e}")
-            raise
+            logger.error(f"Critical error during scraping: {e}")
+            raise RuntimeError(f"Scraping failed for {url}: {e}") from e
         finally:
             browser.close()
             
@@ -120,13 +124,13 @@ class FinancialDataScraper:
         results = {}
         
         for url in urls:
-            try:
-                logger.info(f"Starting to scrape {url}")
-                results[url] = self._scrape_single_url(url)
-                logger.info(f"Successfully scraped {len(results[url])} pages from {url}")
-            except Exception as e:
-                logger.error(f"Failed to scrape {url}: {e}")
-                results[url] = []
+            logger.info(f"Starting to scrape {url}")
+            html_pages = self._scrape_single_url(url)
+            if not html_pages:
+                logger.error(f"Critical error: No pages scraped from {url}")
+                raise RuntimeError(f"No data scraped from {url} - operation cannot continue")
+            results[url] = html_pages
+            logger.info(f"Successfully scraped {len(results[url])} pages from {url}")
                 
         return results
     
@@ -136,35 +140,55 @@ class FinancialDataScraper:
         
         for url, html_pages in scraped_data.items():
             if not html_pages:
-                logger.warning(f"No data to process for {url}")
-                continue
+                logger.error(f"Critical error: No data to process for {url}")
+                raise RuntimeError(f"No data available for processing from {url}")
                 
             tables = []
             
             for i, html_content in enumerate(html_pages):
                 df = self._extract_page_data(html_content, i)
-                if not df.empty:
-                    tables.append(df)
+                tables.append(df)
             
             if not tables:
-                logger.warning(f"No valid tables found for {url}")
-                continue
+                logger.error(f"Critical error: No valid tables found for {url}")
+                raise RuntimeError(f"No valid tables extracted from {url}")
             
             try:
                 # Combine all tables horizontally
                 combined_df = pd.concat(tables, axis=1, ignore_index=True)
+                
+                if combined_df.empty:
+                    logger.error(f"Critical error: Combined dataframe is empty for {url}")
+                    raise RuntimeError(f"Final dataframe is empty for {url}")
+                
                 combined_df.to_excel(self.config.output_path, index=False)
                 logger.info(f"Data saved to {self.config.output_path}")
                 
+                # Verify file was created and has content
+                if not self.config.output_path.exists():
+                    logger.error(f"Critical error: Output file not created: {self.config.output_path}")
+                    raise RuntimeError(f"Failed to create output file: {self.config.output_path}")
+                
+                if self.config.output_path.stat().st_size == 0:
+                    logger.error(f"Critical error: Output file is empty: {self.config.output_path}")
+                    raise RuntimeError(f"Output file is empty: {self.config.output_path}")
+                
             except Exception as e:
-                logger.error(f"Failed to save data for {url}: {e}")
+                logger.error(f"Critical error saving data for {url}: {e}")
+                raise RuntimeError(f"Failed to save data for {url}: {e}") from e
     
     def run(self, urls: List[str] = None) -> None:
         """Main method to run the complete scraping process"""
         try:
             scraped_data = self.scrape_data(urls)
+            
+            # Verify we have data before processing
+            if not scraped_data or all(not pages for pages in scraped_data.values()):
+                logger.error("Critical error: No data scraped from any URL")
+                raise RuntimeError("No data scraped - operation failed")
+            
             self.process_and_save_data(scraped_data)
             logger.info("Scraping process completed successfully")
         except Exception as e:
-            logger.error(f"Scraping process failed: {e}")
+            logger.error(f"Critical scraping process failure: {e}")
             raise
