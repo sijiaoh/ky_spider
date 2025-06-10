@@ -21,45 +21,36 @@ class FinancialDataScraper:
         
     def _setup_browser(self) -> tuple[Browser, Page]:
         """Initialize browser and page"""
-        try:
-            playwright = sync_playwright().start()
-            browser = playwright.chromium.launch(headless=self.config.headless)
-            page = browser.new_page()
-            page.set_default_timeout(self.config.timeout)
-            return browser, page
-        except Exception as e:
-            logger.error(f"Failed to setup browser: {e}")
-            raise
+        playwright = sync_playwright().start()
+        browser = playwright.chromium.launch(headless=self.config.headless)
+        page = browser.new_page()
+        page.set_default_timeout(self.config.timeout)
+        return browser, page
     
     def _extract_page_data(self, html_content: str, page_index: int) -> pd.DataFrame:
         """Extract table data from HTML content"""
-        try:
-            soup = BeautifulSoup(html_content, "lxml")
-            
-            title = soup.select_one("title")
-            if title:
-                logger.info(f"Processing page {page_index}: {title.text.strip()}")
-            
-            zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
-            if not zyzb_table:
-                logger.error(f"Critical error: No table found on page {page_index}")
-                raise RuntimeError(f"Table not found on page {page_index} - data integrity compromised")
-            
-            df = pd.read_html(StringIO(str(zyzb_table)))[0]
-            
-            if df.empty:
-                logger.error(f"Critical error: Empty table data on page {page_index}")
-                raise RuntimeError(f"Empty table data on page {page_index} - data integrity compromised")
-            
-            # Remove first column for non-first pages to avoid duplication
-            if page_index > 0:
-                df = df.iloc[:, 1:]
-            
-            return df
-            
-        except Exception as e:
-            logger.error(f"Critical error extracting data from page {page_index}: {e}")
-            raise RuntimeError(f"Data extraction failed on page {page_index}: {e}") from e
+        soup = BeautifulSoup(html_content, "lxml")
+        
+        title = soup.select_one("title")
+        if title:
+            logger.info(f"Processing page {page_index}: {title.text.strip()}")
+        
+        zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
+        if not zyzb_table:
+            logger.error(f"Critical error: No table found on page {page_index}")
+            raise RuntimeError(f"Table not found on page {page_index} - data integrity compromised")
+        
+        df = pd.read_html(StringIO(str(zyzb_table)))[0]
+        
+        if df.empty:
+            logger.error(f"Critical error: Empty table data on page {page_index}")
+            raise RuntimeError(f"Empty table data on page {page_index} - data integrity compromised")
+        
+        # Remove first column for non-first pages to avoid duplication
+        if page_index > 0:
+            df = df.iloc[:, 1:]
+        
+        return df
     
     def _scrape_single_url(self, url: str) -> List[str]:
         """Scrape all pages from a single URL"""
@@ -83,8 +74,8 @@ class FinancialDataScraper:
                 # Store current table state for comparison
                 current_table = page.query_selector(".zyzb_table")
                 if not current_table:
-                    logger.warning("Table not found, stopping pagination")
-                    break
+                    logger.error("Critical error: Table disappeared during pagination")
+                    raise RuntimeError("Table not found during pagination - data integrity compromised")
                     
                 current_html = current_table.inner_html()
                 
@@ -92,25 +83,18 @@ class FinancialDataScraper:
                 next_button.click()
                 
                 # Wait for table to update
-                try:
-                    page.wait_for_function(
-                        """
-                        (oldHtml) => {
-                            const table = document.querySelector(".zyzb_table");
-                            return table && table.innerHTML !== oldHtml;
-                        }
-                        """,
-                        arg=current_html,
-                        timeout=self.config.timeout
-                    )
-                    page_count += 1
-                except Exception as e:
-                    logger.warning(f"Timeout waiting for page update: {e}")
-                    break
+                page.wait_for_function(
+                    """
+                    (oldHtml) => {
+                        const table = document.querySelector(".zyzb_table");
+                        return table && table.innerHTML !== oldHtml;
+                    }
+                    """,
+                    arg=current_html,
+                    timeout=self.config.timeout
+                )
+                page_count += 1
                     
-        except Exception as e:
-            logger.error(f"Critical error during scraping: {e}")
-            raise RuntimeError(f"Scraping failed for {url}: {e}") from e
         finally:
             browser.close()
             
@@ -149,46 +133,33 @@ class FinancialDataScraper:
                 df = self._extract_page_data(html_content, i)
                 tables.append(df)
             
-            if not tables:
-                logger.error(f"Critical error: No valid tables found for {url}")
-                raise RuntimeError(f"No valid tables extracted from {url}")
+            # Combine all tables horizontally
+            combined_df = pd.concat(tables, axis=1, ignore_index=True)
             
-            try:
-                # Combine all tables horizontally
-                combined_df = pd.concat(tables, axis=1, ignore_index=True)
-                
-                if combined_df.empty:
-                    logger.error(f"Critical error: Combined dataframe is empty for {url}")
-                    raise RuntimeError(f"Final dataframe is empty for {url}")
-                
-                combined_df.to_excel(self.config.output_path, index=False)
-                logger.info(f"Data saved to {self.config.output_path}")
-                
-                # Verify file was created and has content
-                if not self.config.output_path.exists():
-                    logger.error(f"Critical error: Output file not created: {self.config.output_path}")
-                    raise RuntimeError(f"Failed to create output file: {self.config.output_path}")
-                
-                if self.config.output_path.stat().st_size == 0:
-                    logger.error(f"Critical error: Output file is empty: {self.config.output_path}")
-                    raise RuntimeError(f"Output file is empty: {self.config.output_path}")
-                
-            except Exception as e:
-                logger.error(f"Critical error saving data for {url}: {e}")
-                raise RuntimeError(f"Failed to save data for {url}: {e}") from e
+            if combined_df.empty:
+                logger.error(f"Critical error: Combined dataframe is empty for {url}")
+                raise RuntimeError(f"Final dataframe is empty for {url}")
+            
+            combined_df.to_excel(self.config.output_path, index=False)
+            logger.info(f"Data saved to {self.config.output_path}")
+            
+            # Verify file was created and has content
+            if not self.config.output_path.exists():
+                logger.error(f"Critical error: Output file not created: {self.config.output_path}")
+                raise RuntimeError(f"Failed to create output file: {self.config.output_path}")
+            
+            if self.config.output_path.stat().st_size == 0:
+                logger.error(f"Critical error: Output file is empty: {self.config.output_path}")
+                raise RuntimeError(f"Output file is empty: {self.config.output_path}")
     
     def run(self, urls: List[str] = None) -> None:
         """Main method to run the complete scraping process"""
-        try:
-            scraped_data = self.scrape_data(urls)
-            
-            # Verify we have data before processing
-            if not scraped_data or all(not pages for pages in scraped_data.values()):
-                logger.error("Critical error: No data scraped from any URL")
-                raise RuntimeError("No data scraped - operation failed")
-            
-            self.process_and_save_data(scraped_data)
-            logger.info("Scraping process completed successfully")
-        except Exception as e:
-            logger.error(f"Critical scraping process failure: {e}")
-            raise
+        scraped_data = self.scrape_data(urls)
+        
+        # Verify we have data before processing
+        if not scraped_data or all(not pages for pages in scraped_data.values()):
+            logger.error("Critical error: No data scraped from any URL")
+            raise RuntimeError("No data scraped - operation failed")
+        
+        self.process_and_save_data(scraped_data)
+        logger.info("Scraping process completed successfully")
