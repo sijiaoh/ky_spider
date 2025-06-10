@@ -52,6 +52,33 @@ class FinancialDataScraper:
         
         return df, page_title
     
+    def _split_dataframe_by_indicators(self, df: pd.DataFrame) -> List[pd.DataFrame]:
+        """Split dataframe by rows where first column ends with 指标"""
+        # Find rows where first column ends with 指标
+        first_col = df.iloc[:, 0].astype(str)
+        indicator_rows = first_col.str.endswith('指标')
+        indicator_indices = df.index[indicator_rows].tolist()
+        
+        if not indicator_indices:
+            # No indicator sections found, return whole dataframe
+            return [df]
+        
+        indicator_dfs = []
+        
+        for i, start_idx in enumerate(indicator_indices):
+            if i < len(indicator_indices) - 1:
+                # Section from current indicator to next indicator (exclusive)
+                end_idx = indicator_indices[i + 1]
+                section_df = df.iloc[start_idx:end_idx].copy()
+            else:
+                # Last section: from current indicator to end of dataframe
+                section_df = df.iloc[start_idx:].copy()
+            
+            indicator_dfs.append(section_df)
+        
+        logger.info(f"Split dataframe into {len(indicator_dfs)} indicator sections")
+        return indicator_dfs
+    
     def _scrape_single_url(self, page: Page, url: str) -> List[str]:
         """Scrape all pages from a single URL"""
         html_pages = []
