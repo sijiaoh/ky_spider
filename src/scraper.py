@@ -52,77 +52,75 @@ class FinancialDataScraper:
         
         return df
     
-    def _scrape_single_url(self, url: str) -> List[str]:
+    def _scrape_single_url(self, page: Page, url: str) -> List[str]:
         """Scrape all pages from a single URL"""
         html_pages = []
         
-        browser, page = self._setup_browser()
+        # Initial page load
+        logger.info(f"Loading initial page from {url}")
+        page.goto(url)
         
-        try:
-            # Initial page load
-            logger.info(f"Loading initial page from {url}")
-            page.goto(url)
+        # Wait for table to be fully loaded
+        logger.info("Waiting for table to load...")
+        page.wait_for_selector(".zyzb_table .report_table .table1", timeout=self.config.timeout)
+        logger.info("Table loaded successfully")
+        
+        page_count = 0
+        while True:
+            logger.info(f"Scraping page {page_count + 1}")
+            html_pages.append(page.content())
             
-            # Wait for table to be fully loaded
-            logger.info("Waiting for table to load...")
-            page.wait_for_selector(".zyzb_table .report_table .table1", timeout=self.config.timeout)
-            logger.info("Table loaded successfully")
+            # Check for next button
+            next_button = page.query_selector(".zyzb_table .next")
+            if not next_button or not next_button.is_visible():
+                logger.info(f"No more pages found. Total pages: {page_count + 1}")
+                break
             
-            page_count = 0
-            while True:
-                logger.info(f"Scraping page {page_count + 1}")
-                html_pages.append(page.content())
+            # Store current table state for comparison
+            current_table = page.query_selector(".zyzb_table")
+            if not current_table:
+                logger.error("Critical error: Table disappeared during pagination")
+                raise RuntimeError("Table not found during pagination - data integrity compromised")
                 
-                # Check for next button
-                next_button = page.query_selector(".zyzb_table .next")
-                if not next_button or not next_button.is_visible():
-                    logger.info(f"No more pages found. Total pages: {page_count + 1}")
-                    break
-                
-                # Store current table state for comparison
-                current_table = page.query_selector(".zyzb_table")
-                if not current_table:
-                    logger.error("Critical error: Table disappeared during pagination")
-                    raise RuntimeError("Table not found during pagination - data integrity compromised")
-                    
-                current_html = current_table.inner_html()
-                
-                # Click next button
-                next_button.click()
-                
-                # Wait for table to update (SPA content change)
-                page.wait_for_function(
-                    """
-                    (oldHtml) => {
-                        const table = document.querySelector(".zyzb_table");
-                        return table && table.innerHTML !== oldHtml;
-                    }
-                    """,
-                    arg=current_html,
-                    timeout=self.config.timeout
-                )
-                page_count += 1
-                    
-        finally:
-            browser.close()
+            current_html = current_table.inner_html()
+            
+            # Click next button
+            next_button.click()
+            
+            # Wait for table to update (SPA content change)
+            page.wait_for_function(
+                """
+                (oldHtml) => {
+                    const table = document.querySelector(".zyzb_table");
+                    return table && table.innerHTML !== oldHtml;
+                }
+                """,
+                arg=current_html,
+                timeout=self.config.timeout
+            )
+            page_count += 1
             
         return html_pages
     
     def scrape_data(self, urls: List[str] = None) -> Dict[str, List[str]]:
-        """Scrape data from multiple URLs"""
+        """Scrape data from multiple URLs using single browser instance"""
         if urls is None:
             urls = [self.config.full_url]
             
         results = {}
+        browser, page = self._setup_browser()
         
-        for url in urls:
-            logger.info(f"Starting to scrape {url}")
-            html_pages = self._scrape_single_url(url)
-            if not html_pages:
-                logger.error(f"Critical error: No pages scraped from {url}")
-                raise RuntimeError(f"No data scraped from {url} - operation cannot continue")
-            results[url] = html_pages
-            logger.info(f"Successfully scraped {len(results[url])} pages from {url}")
+        try:
+            for url in urls:
+                logger.info(f"Starting to scrape {url}")
+                html_pages = self._scrape_single_url(page, url)
+                if not html_pages:
+                    logger.error(f"Critical error: No pages scraped from {url}")
+                    raise RuntimeError(f"No data scraped from {url} - operation cannot continue")
+                results[url] = html_pages
+                logger.info(f"Successfully scraped {len(results[url])} pages from {url}")
+        finally:
+            browser.close()
                 
         return results
     
