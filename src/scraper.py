@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright, Browser, Page
 import pandas as pd
 from io import StringIO
+import cn2an
 
 from .config import ScrapingConfig
 
@@ -78,6 +79,32 @@ class FinancialDataScraper:
         
         logger.info(f"Split dataframe into {len(indicator_dfs)} indicator sections")
         return indicator_dfs
+    
+    def _convert_chinese_numbers(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Convert Chinese number formats to pure numbers using cn2an"""
+        # Process data starting from row 2, column 2 (inclusive)
+        converted_df = df.copy()
+        
+        for row_idx in range(1, len(df)):  # Start from row 2 (index 1)
+            for col_idx in range(1, len(df.columns)):  # Start from column 2 (index 1)
+                cell_value = df.iloc[row_idx, col_idx]
+                
+                if pd.isna(cell_value):
+                    continue
+                
+                cell_str = str(cell_value).strip()
+                if not cell_str:
+                    continue
+                
+                try:
+                    # Use cn2an to convert Chinese numbers to Arabic numbers
+                    converted_value = cn2an.cn2an(cell_str, "smart")
+                    converted_df.iloc[row_idx, col_idx] = converted_value
+                except (ValueError, TypeError):
+                    # If conversion fails, keep original value
+                    continue
+        
+        return converted_df
     
     def _scrape_single_url(self, page: Page, url: str) -> List[str]:
         """Scrape all pages from a single URL"""
@@ -180,8 +207,14 @@ class FinancialDataScraper:
             # Split the URL's combined data by indicator sections
             indicator_sections = self._split_dataframe_by_indicators(url_combined_df)
             
-            # Recombine the indicator sections for this URL
-            url_combined_df = pd.concat(indicator_sections, axis=0, ignore_index=True)
+            # Convert Chinese numbers in each section
+            converted_sections = []
+            for section in indicator_sections:
+                converted_section = self._convert_chinese_numbers(section)
+                converted_sections.append(converted_section)
+            
+            # Recombine the converted indicator sections for this URL
+            url_combined_df = pd.concat(converted_sections, axis=0, ignore_index=True)
             
             if url_combined_df.empty:
                 logger.error(f"Critical error: Combined dataframe is empty for {url}")
