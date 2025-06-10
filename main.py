@@ -25,6 +25,11 @@ def parse_arguments() -> argparse.Namespace:
         help="Stock code to scrape (default: SH605136)"
     )
     parser.add_argument(
+        "--stock-codes",
+        nargs="+",
+        help="Multiple stock codes to scrape (overrides stock-code if provided)"
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("build"),
@@ -81,7 +86,22 @@ def main() -> int:
         
         # Create and run scraper
         scraper = FinancialDataScraper(config)
-        scraper.run()
+        
+        # Generate URLs from stock codes if provided
+        if args.stock_codes:
+            urls = []
+            for stock_code in args.stock_codes:
+                temp_config = ScrapingConfig(
+                    stock_code=stock_code,
+                    output_dir=args.output_dir,
+                    output_filename=args.output_file,
+                    headless=args.headless,
+                    timeout=args.timeout
+                )
+                urls.append(temp_config.full_url)
+            scraper.run(urls)
+        else:
+            scraper.run()
         
         return 0
         

@@ -7,8 +7,11 @@ Python 金融数据爬虫项目，使用 Playwright 和 pandas
 
 ### 运行和测试
 ```bash
-# 运行爬虫
-python main.py
+# 运行爬虫（单个股票代码）
+python main.py --stock-code SH605136
+
+# 运行爬虫（多个股票代码）
+python main.py --stock-codes SH605136 SZ000001 SH000001
 ```
 
 ### 依赖管理
@@ -50,6 +53,7 @@ playwright install
 - 文件完整性验证：检查输出文件存在性和内容
 - SPA分页处理：正确处理单页应用的内容更新
 - 表格加载等待：确保目标表格完全加载后再抓取
+- 多股票代码支持：支持多个股票代码的数据纵向合并，包含来源标识
 
 ### 技术架构
 - Python 3.13+ 和 Playwright 异步爬虫

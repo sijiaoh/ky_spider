@@ -130,35 +130,57 @@ class FinancialDataScraper:
         """Process scraped HTML data and save to Excel"""
         self.config.output_dir.mkdir(exist_ok=True)
         
+        all_url_data = []
+        
+        # Process each URL's data
         for url, html_pages in scraped_data.items():
             if not html_pages:
                 logger.error(f"Critical error: No data to process for {url}")
                 raise RuntimeError(f"No data available for processing from {url}")
-                
-            tables = []
             
+            logger.info(f"Processing data from {url}")
+            page_tables = []
+            
+            # Process each page within the URL
             for i, html_content in enumerate(html_pages):
                 df = self._extract_page_data(html_content, i)
-                tables.append(df)
+                page_tables.append(df)
             
-            # Combine all tables horizontally
-            combined_df = pd.concat(tables, axis=1, ignore_index=True)
+            # Combine pages horizontally for this URL
+            url_combined_df = pd.concat(page_tables, axis=1, ignore_index=True)
             
-            if combined_df.empty:
+            if url_combined_df.empty:
                 logger.error(f"Critical error: Combined dataframe is empty for {url}")
                 raise RuntimeError(f"Final dataframe is empty for {url}")
             
-            combined_df.to_excel(self.config.output_path, index=False)
-            logger.info(f"Data saved to {self.config.output_path}")
-            
-            # Verify file was created and has content
-            if not self.config.output_path.exists():
-                logger.error(f"Critical error: Output file not created: {self.config.output_path}")
-                raise RuntimeError(f"Failed to create output file: {self.config.output_path}")
-            
-            if self.config.output_path.stat().st_size == 0:
-                logger.error(f"Critical error: Output file is empty: {self.config.output_path}")
-                raise RuntimeError(f"Output file is empty: {self.config.output_path}")
+            # Add URL identifier column
+            url_combined_df.insert(0, 'Source_URL', url)
+            all_url_data.append(url_combined_df)
+            logger.info(f"Processed {len(page_tables)} pages from {url}")
+        
+        # Combine all URLs vertically
+        if not all_url_data:
+            logger.error("Critical error: No data from any URL")
+            raise RuntimeError("No data available from any URL")
+        
+        final_df = pd.concat(all_url_data, axis=0, ignore_index=True)
+        
+        if final_df.empty:
+            logger.error("Critical error: Final combined dataframe is empty")
+            raise RuntimeError("Final combined dataframe is empty")
+        
+        # Save to Excel
+        final_df.to_excel(self.config.output_path, index=False)
+        logger.info(f"Combined data from {len(scraped_data)} URLs saved to {self.config.output_path}")
+        
+        # Verify file was created and has content
+        if not self.config.output_path.exists():
+            logger.error(f"Critical error: Output file not created: {self.config.output_path}")
+            raise RuntimeError(f"Failed to create output file: {self.config.output_path}")
+        
+        if self.config.output_path.stat().st_size == 0:
+            logger.error(f"Critical error: Output file is empty: {self.config.output_path}")
+            raise RuntimeError(f"Output file is empty: {self.config.output_path}")
     
     def run(self, urls: List[str] = None) -> None:
         """Main method to run the complete scraping process"""
