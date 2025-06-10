@@ -63,6 +63,11 @@ class FinancialDataScraper:
             logger.info(f"Loading initial page from {url}")
             page.goto(url)
             
+            # Wait for table to be fully loaded
+            logger.info("Waiting for table to load...")
+            page.wait_for_selector(".zyzb_table .report_table .table1", timeout=self.config.timeout)
+            logger.info("Table loaded successfully")
+            
             page_count = 0
             while True:
                 logger.info(f"Scraping page {page_count + 1}")
