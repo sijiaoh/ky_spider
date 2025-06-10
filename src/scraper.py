@@ -177,6 +177,12 @@ class FinancialDataScraper:
             # Combine pages horizontally for this URL
             url_combined_df = pd.concat(page_tables, axis=1, ignore_index=True)
             
+            # Split the URL's combined data by indicator sections
+            indicator_sections = self._split_dataframe_by_indicators(url_combined_df)
+            
+            # Recombine the indicator sections for this URL
+            url_combined_df = pd.concat(indicator_sections, axis=0, ignore_index=True)
+            
             if url_combined_df.empty:
                 logger.error(f"Critical error: Combined dataframe is empty for {url}")
                 raise RuntimeError(f"Final dataframe is empty for {url}")
