@@ -97,9 +97,16 @@ class FinancialDataScraper:
                     continue
                 
                 try:
-                    # Use cn2an to convert Chinese numbers to Arabic numbers
-                    converted_value = cn2an.cn2an(cell_str, "smart")
-                    converted_df.iloc[row_idx, col_idx] = converted_value
+                    # Handle 万亿 directly (cn2an doesn't support it)
+                    if '万亿' in cell_str:
+                        base_part = cell_str.replace('万亿', '')
+                        base_num = float(base_part)
+                        converted_value = base_num * 1000000000000  # 1万亿 = 10^12
+                        converted_df.iloc[row_idx, col_idx] = converted_value
+                    else:
+                        # Use cn2an for other Chinese number formats
+                        converted_value = cn2an.cn2an(cell_str, "smart")
+                        converted_df.iloc[row_idx, col_idx] = converted_value
                 except (ValueError, TypeError):
                     # If conversion fails, keep original value
                     continue
