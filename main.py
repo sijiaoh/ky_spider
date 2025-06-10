@@ -1,5 +1,7 @@
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+import pandas as pd
+from io import StringIO
 
 URL = "https://emweb.securities.eastmoney.com/pc_hsf10/pages/index.html?type=web&code=SH605136&color=b#/cwfx"
 
@@ -20,10 +22,11 @@ def main():
     soup = BeautifulSoup(html, "lxml")
 
     title = soup.select_one("title").text.strip()
-    headings = [h.text.strip() for h in soup.select("h2")]
-
     print("TITLE:", title)
-    print("H2s :", headings)
+
+    zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
+    df = pd.read_html(StringIO(str(zyzb_table)))[0]
+    print(df.to_string(index=False))
 
 if __name__ == "__main__":
     main()
