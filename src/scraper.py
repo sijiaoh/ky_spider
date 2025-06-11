@@ -119,7 +119,7 @@ class FinancialDataScraper:
         
         # Initial page load
         logger.info(f"Loading initial page from {url}")
-        page.goto(url)
+        page.goto(url, wait_until='networkidle')
         
         # Wait for table to be fully loaded
         logger.info("Waiting for table to load...")
@@ -147,6 +147,9 @@ class FinancialDataScraper:
             
             # Click next button
             next_button.click()
+            
+            # Wait for network requests to complete (if any)
+            page.wait_for_load_state('networkidle')
             
             # Wait for table to update (SPA content change)
             page.wait_for_function(
