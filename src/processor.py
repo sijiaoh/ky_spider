@@ -91,24 +91,32 @@ class FinancialDataProcessor:
                 if not cell_str:
                     continue
                 
+                # Skip non-data indicators
+                if cell_str == "--":
+                    continue
+                
+                converted_value = None
+                
+                # Try cn2an first for standard Chinese number formats
                 try:
-                    # First try cn2an for standard Chinese number formats
                     converted_value = cn2an.cn2an(cell_str, "smart")
-                    converted_df.iloc[row_idx, col_idx] = converted_value
                 except (ValueError, TypeError):
                     # If cn2an fails, try handling 万亿 directly
-                    try:
-                        if '万亿' in cell_str:
+                    if '万亿' in cell_str:
+                        try:
                             base_part = cell_str.replace('万亿', '')
                             base_num = float(base_part)
                             converted_value = base_num * 1000000000000  # 1万亿 = 10^12
-                            converted_df.iloc[row_idx, col_idx] = converted_value
-                        else:
-                            # If both methods fail, keep original value
-                            continue
-                    except (ValueError, TypeError):
-                        # If all conversion attempts fail, keep original value
-                        continue
+                        except (ValueError, TypeError):
+                            pass  # Will be handled below
+                
+                # If all conversion attempts failed, raise exception
+                if converted_value is None:
+                    logger.error(f"Critical error: Failed to convert number '{cell_str}' at row {row_idx+1}, col {col_idx+1}")
+                    raise RuntimeError(f"Number conversion failed for '{cell_str}' - data integrity compromised")
+                
+                # Apply the converted value
+                converted_df.iloc[row_idx, col_idx] = converted_value
         
         return converted_df
     
