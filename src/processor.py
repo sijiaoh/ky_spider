@@ -23,9 +23,12 @@ class FinancialDataProcessor:
         """Extract table data and title from HTML content"""
         soup = BeautifulSoup(html_content, "lxml")
         
-        # TODO: 没有title时抛异常
         title = soup.select_one("title")
-        page_title = title.text.strip() if title else f"Unknown_Page_{page_index}"
+        if not title or not title.text.strip():
+            logger.error(f"Critical error: No title found on page {page_index}")
+            raise RuntimeError(f"Page title not found on page {page_index} - data integrity compromised")
+        
+        page_title = title.text.strip()
         logger.info(f"Processing page {page_index}: {page_title}")
         
         zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
@@ -89,21 +92,23 @@ class FinancialDataProcessor:
                     continue
                 
                 try:
-                    # TODO: 在cn2an处理失败后尝试处理万亿
-                    #
-                    # Handle 万亿 directly (cn2an doesn't support it)
-                    if '万亿' in cell_str:
-                        base_part = cell_str.replace('万亿', '')
-                        base_num = float(base_part)
-                        converted_value = base_num * 1000000000000  # 1万亿 = 10^12
-                        converted_df.iloc[row_idx, col_idx] = converted_value
-                    else:
-                        # Use cn2an for other Chinese number formats
-                        converted_value = cn2an.cn2an(cell_str, "smart")
-                        converted_df.iloc[row_idx, col_idx] = converted_value
+                    # First try cn2an for standard Chinese number formats
+                    converted_value = cn2an.cn2an(cell_str, "smart")
+                    converted_df.iloc[row_idx, col_idx] = converted_value
                 except (ValueError, TypeError):
-                    # If conversion fails, keep original value
-                    continue
+                    # If cn2an fails, try handling 万亿 directly
+                    try:
+                        if '万亿' in cell_str:
+                            base_part = cell_str.replace('万亿', '')
+                            base_num = float(base_part)
+                            converted_value = base_num * 1000000000000  # 1万亿 = 10^12
+                            converted_df.iloc[row_idx, col_idx] = converted_value
+                        else:
+                            # If both methods fail, keep original value
+                            continue
+                    except (ValueError, TypeError):
+                        # If all conversion attempts fail, keep original value
+                        continue
         
         return converted_df
     
