@@ -11,6 +11,7 @@ from pathlib import Path
 
 from src.config import ScrapingConfig
 from src.scraper import FinancialDataScraper
+from src.processor import FinancialDataProcessor
 from src.utils import setup_logging
 
 
@@ -84,8 +85,9 @@ def main() -> int:
             timeout=args.timeout
         )
         
-        # Create and run scraper
+        # Create scraper and processor
         scraper = FinancialDataScraper(config)
+        processor = FinancialDataProcessor(config)
         
         # Generate URLs from stock codes if provided
         if args.stock_codes:
@@ -99,9 +101,12 @@ def main() -> int:
                     timeout=args.timeout
                 )
                 urls.append(temp_config.full_url)
-            scraper.run(urls)
+            scraped_data = scraper.run(urls)
         else:
-            scraper.run()
+            scraped_data = scraper.run()
+        
+        # Process scraped data and save to Excel
+        processor.process_and_save_data(scraped_data)
         
         return 0
         
