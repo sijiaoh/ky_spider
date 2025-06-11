@@ -30,8 +30,3 @@ def setup_logging(log_level: str = "INFO", log_file: Path = None) -> None:
         handlers=handlers,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
-
-
-def ensure_directory_exists(path: Path) -> None:
-    """Ensure a directory exists, creating it if necessary"""
-    path.mkdir(parents=True, exist_ok=True)
