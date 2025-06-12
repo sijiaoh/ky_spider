@@ -19,8 +19,9 @@ app = Flask(__name__)
 OUTPUT_DIR = Path('downloads')
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-# 任务状态存储
+# 任务状态存储（线程安全）
 tasks = {}
+tasks_lock = threading.Lock()
 
 
 @app.route('/')
@@ -34,7 +35,8 @@ def scrape():
         return jsonify({'error': 'Invalid URLs'}), 400
     
     task_id = str(uuid.uuid4())[:8]
-    tasks[task_id] = {'status': 'processing'}
+    with tasks_lock:
+        tasks[task_id] = {'status': 'processing'}
     
     # 后台处理
     threading.Thread(target=process_urls, args=(urls, task_id), daemon=True).start()
@@ -63,22 +65,27 @@ def process_urls(urls, task_id):
         scraped_data = scraper.run(urls)
         processor.process_and_save_data(scraped_data)
         
-        tasks[task_id] = {'status': 'completed', 'file': str(output_path)}
+        with tasks_lock:
+            tasks[task_id] = {'status': 'completed', 'file': str(output_path)}
         
     except Exception as e:
-        tasks[task_id] = {'status': 'error', 'error': str(e)}
+        with tasks_lock:
+            tasks[task_id] = {'status': 'error', 'error': str(e)}
 
 @app.route('/status/<task_id>')
 def status(task_id):
-    return jsonify(tasks.get(task_id, {'status': 'not_found'}))
+    with tasks_lock:
+        return jsonify(tasks.get(task_id, {'status': 'not_found'}))
 
 @app.route('/download/<task_id>')
 def download(task_id):
-    task = tasks.get(task_id)
-    if not task or task.get('status') != 'completed':
-        return 'File not ready', 404
+    with tasks_lock:
+        task = tasks.get(task_id)
+        if not task or task.get('status') != 'completed':
+            return 'File not ready', 404
+        file_path = task['file']
     
-    return send_file(task['file'], as_attachment=True)
+    return send_file(file_path, as_attachment=True)
 
 if __name__ == '__main__':
     print("启动服务: http://localhost:8080")
