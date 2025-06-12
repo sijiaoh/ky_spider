@@ -31,6 +31,15 @@ def parse_arguments() -> argparse.Namespace:
         help="Multiple stock codes to scrape (overrides stock-code if provided)"
     )
     parser.add_argument(
+        "--url",
+        help="Direct URL to scrape (overrides stock-code)"
+    )
+    parser.add_argument(
+        "--urls",
+        nargs="+",
+        help="Multiple URLs to scrape (overrides all other stock options)"
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("build"),
@@ -89,8 +98,15 @@ def main() -> int:
         scraper = FinancialDataScraper(config)
         processor = FinancialDataProcessor(config)
         
-        # Generate URLs from stock codes if provided
-        if args.stock_codes:
+        # Determine URLs to scrape
+        if args.urls:
+            # Direct URLs provided
+            scraped_data = scraper.run(args.urls)
+        elif args.url:
+            # Single URL provided
+            scraped_data = scraper.run([args.url])
+        elif args.stock_codes:
+            # Multiple stock codes provided
             urls = []
             for stock_code in args.stock_codes:
                 temp_config = ScrapingConfig(
@@ -103,6 +119,7 @@ def main() -> int:
                 urls.append(temp_config.full_url)
             scraped_data = scraper.run(urls)
         else:
+            # Default single stock code
             scraped_data = scraper.run()
         
         # Process scraped data and save to Excel
