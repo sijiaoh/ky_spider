@@ -26,5 +26,5 @@ RUN mkdir -p downloads
 # 暴露端口
 EXPOSE 8080
 
-# 启动命令
-CMD ["uv", "run", "python", "web_app.py"]
+# 启动命令 - 生产环境使用Gunicorn
+CMD ["uv", "run", "gunicorn", "-c", "gunicorn.conf.py", "web_app:app"]
