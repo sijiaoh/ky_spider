@@ -12,6 +12,12 @@ python main.py --stock-code SH605136
 
 # 运行爬虫（多个股票代码）
 python main.py --stock-codes SH605136 SZ000001 SH000001
+
+# 运行爬虫（单个URL）
+python main.py --url "https://example.com/path"
+
+# 运行爬虫（多个URL）
+python main.py --urls "https://url1.com" "https://url2.com"
 ```
 
 ### 依赖管理
@@ -35,6 +41,7 @@ playwright install
 - `build/` - 输出文件目录
 - 配置类在 `src/config.py`
 - 主要逻辑在 `src/scraper.py`
+- 数据处理在 `src/processor.py`
 
 ### 调试参数
 - `--log-level DEBUG` 查看详细日志
@@ -43,6 +50,7 @@ playwright install
 
 ## 智能提示
 - 修改爬虫逻辑时重点关注 `src/scraper.py:FinancialDataScraper` 类
+- 数据处理和合并逻辑在 `src/processor.py:FinancialDataProcessor` 类
 - 添加新配置项在 `src/config.py:ScrapingConfig` 中定义
 - 工具函数统一放在 `src/utils.py` 中
 
@@ -53,12 +61,14 @@ playwright install
 - 文件完整性验证：检查输出文件存在性和内容
 - SPA分页处理：正确处理单页应用的内容更新
 - 表格加载等待：确保目标表格完全加载后再抓取
-- 多股票代码支持：支持多个股票代码的数据纵向合并，包含来源标识
+- 多数据源支持：支持多个URL或股票代码的数据合并，包含来源标识
+- 日期对齐合并：不同数据源按日期列智能对齐，避免数据错位
 
 ### 技术架构
 - Python 3.13+ 和 Playwright 异步爬虫
-- 模块化设计：配置、爬虫、工具分离
+- 模块化设计：配置、爬虫、数据处理分离
 - uv 包管理器提供快速依赖解析
+- 支持直接URL输入和股票代码转换两种模式
 
 ## 自我学习区
 <!-- Claude Code 在此记录新发现的项目模式和改进 -->

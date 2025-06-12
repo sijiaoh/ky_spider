@@ -1,172 +1,93 @@
-# KY Spider - Data Extraction Framework
+# 金融数据爬虫工具
 
-A Python web scraping framework developed collaboratively with Claude Code for educational purposes, featuring automated data extraction and intelligent processing capabilities.
+## 快速开始
 
-## Features
-
-- **Automated Web Scraping**: Browser automation using Playwright with intelligent page handling
-- **Multi-page Support**: Automatic pagination detection and data collection across multiple pages
-- **Smart Data Processing**: Advanced table parsing with Chinese number conversion and data normalization
-- **Indicator-based Segmentation**: Intelligent splitting of data tables by indicator markers
-- **Multi-source Support**: Configurable to handle multiple data sources with unified output
-- **Robust Architecture**: Comprehensive error handling and type-safe implementation
-- **Educational Framework**: Designed for learning web scraping techniques and data processing patterns
-
-## Installation
-
-### Using uv (Recommended)
+### 安装依赖
 
 ```bash
-# Install dependencies
+# 使用uv包管理器（推荐）
 uv sync
 
-# Install Playwright browsers
-uv run playwright install chromium
+# 安装浏览器
+playwright install
 ```
 
-### Using pip
+### 基本使用
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# 使用股票代码
+python main.py --stock-code SH605136
 
-# Install Playwright browsers  
-playwright install chromium
+# 使用直接URL
+python main.py --url "https://example.com/financial-data"
+
+# 批量处理多个股票
+python main.py --stock-codes SH605136 SZ000001 SH000001
+
+# 批量处理多个URL
+python main.py --urls "https://url1.com" "https://url2.com"
 ```
 
-## Usage
+## 命令行参数
 
-### Basic Usage
+### 数据源参数（按优先级排序）
 
-```bash
-# Extract data with default settings
-python main.py
+| 参数 | 描述 | 示例 |
+|------|------|------|
+| `--urls` | 多个URL（最高优先级） | `--urls "url1" "url2"` |
+| `--url` | 单个URL | `--url "https://example.com"` |
+| `--stock-codes` | 多个股票代码 | `--stock-codes SH605136 SZ000001` |
+| `--stock-code` | 单个股票代码（默认） | `--stock-code SH605136` |
 
-# Or with uv
-uv run python main.py
-```
+### 输出控制
 
-### Advanced Usage
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `--output-dir` | `build` | 输出目录 |
+| `--output-file` | `zyzb_table.xlsx` | 输出文件名 |
 
-```bash
-# Extract data with custom parameters
-python main.py --stock-code EXAMPLE123 --output-dir results --output-file data.xlsx
+### 调试参数
 
-# Multiple data sources
-python main.py --stock-codes EXAMPLE1 EXAMPLE2 EXAMPLE3
+| 参数 | 默认值 | 描述 |
+|------|--------|------|
+| `--log-level` | `INFO` | 日志级别（DEBUG/INFO/WARNING/ERROR） |
+| `--log-file` | - | 日志输出文件（可选） |
+| `--headless` | `True` | 无头模式运行 |
+| `--timeout` | `10000` | 页面超时时间（毫秒） |
 
-# Enable debug logging
-python main.py --log-level DEBUG --log-file scraper.log
-
-# Run with visible browser (for educational observation)
-python main.py --headless false
-
-# Set custom timeout
-python main.py --timeout 15000
-```
-
-### Command Line Options
-
-- `--stock-code`: Primary data identifier (default: SH605136)
-- `--stock-codes`: Multiple data identifiers for batch processing
-- `--output-dir`: Output directory (default: build)
-- `--output-file`: Output filename (default: zyzb_table.xlsx)
-- `--log-level`: Logging level (DEBUG, INFO, WARNING, ERROR)
-- `--log-file`: Optional log file path
-- `--headless`: Run browser in headless mode (default: true)
-- `--timeout`: Page timeout in milliseconds (default: 10000)
-
-## Project Structure
+## 项目结构
 
 ```
 ky_spider/
 ├── src/
-│   ├── __init__.py
-│   ├── config.py       # Configuration management
-│   ├── scraper.py      # Main scraping logic
-│   └── utils.py        # Utility functions
-├── build/              # Output directory
-├── main.py             # Entry point
-├── pyproject.toml      # Project configuration
-└── README.md           # This file
+│   ├── config.py          # 配置管理
+│   ├── scraper.py         # 网页爬取核心
+│   ├── processor.py       # 数据处理和合并
+│   └── utils.py          # 工具函数
+├── build/                # 输出目录
+├── main.py              # 程序入口
+└── README.md           # 项目文档
 ```
 
-## How It Works
-
-1. **Configuration**: Load extraction parameters from command line or defaults
-2. **Browser Setup**: Initialize Playwright with optimized Chrome browser settings
-3. **Page Navigation**: Navigate to target data sources using configurable URLs
-4. **Smart Extraction**: Extract structured table data with automatic format detection
-5. **Pagination Handling**: Intelligent pagination detection and traversal
-6. **Data Processing**: 
-   - Split data by indicator markers for structured analysis
-   - Convert Chinese numeric formats to standard numbers
-   - Merge multiple data sources with source identification
-7. **Export**: Generate Excel output with processed and normalized data
-
-## Development & Learning
-
-### Educational Focus
-
-This project was developed collaboratively with Claude Code to demonstrate:
-
-- **Modern Python Development**: Type hints, modular architecture, and best practices
-- **Web Scraping Techniques**: Browser automation, pagination handling, and data extraction
-- **Data Processing Patterns**: Text normalization, format conversion, and structured output
-- **Error Handling Strategies**: Robust exception management and logging
-- **AI-Human Collaboration**: Iterative development with AI assistance
-
-### Code Quality
-
-The framework implements professional development standards:
-
-- **Type Safety**: Complete type annotations for better code reliability
-- **Modular Architecture**: Clear separation of concerns across modules
-- **Comprehensive Logging**: Detailed logging for debugging and monitoring
-- **Configuration Management**: Centralized and flexible parameter handling
-- **Documentation**: Extensive inline documentation and usage examples
-
-### Extending the Framework
-
-1. Configure new data sources in the `ScrapingConfig` class
-2. Extend extraction logic in the main scraper module
-3. Add new data processing functions for specific formats
-4. Implement additional output formats as needed
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Browser not found**: Run `playwright install chromium` to install browser dependencies
-2. **Timeout errors**: Increase timeout with `--timeout` option for slow connections
-3. **Data extraction failures**: Verify target website structure hasn't changed
-4. **Permission denied**: Ensure output directory is writable
-5. **Chinese number conversion**: Check that cn2an library is properly installed
-
-### Debugging
-
-Enable debug logging to see detailed extraction process:
+## 调试技巧
 
 ```bash
-python main.py --log-level DEBUG --log-file debug.log
+# 查看详细执行过程
+python main.py --log-level DEBUG --stock-code SH605136
+
+# 显示浏览器操作（非无头模式）
+python main.py --headless false --stock-code SH605136
+
+# 输出日志到文件
+python main.py --log-file debug.log --stock-code SH605136
 ```
 
-## Educational Purpose & Collaboration
+## 技术栈
 
-This project was developed as a collaborative learning exercise with Claude Code to explore:
+- **Python 3.13+** - 现代Python特性支持
+- **Playwright** - 高性能浏览器自动化
+- **pandas** - 数据处理和分析
+- **BeautifulSoup** - HTML解析
+- **cn2an** - 中文数字转换
+- **uv** - 快速包管理
 
-- Modern web scraping techniques and best practices
-- AI-assisted software development workflows
-- Data processing and normalization strategies
-- Professional Python development patterns
-
-## License & Usage
-
-This project is developed for **educational and research purposes only**. When using this framework:
-
-- Respect website terms of service and robots.txt files
-- Implement appropriate rate limiting and delays
-- Use responsibly and ethically for learning purposes
-- Consider the impact on target websites and servers
-
-**Collaborative Development**: This project demonstrates human-AI collaboration in software development, showcasing how AI tools like Claude Code can assist in creating educational programming resources.
