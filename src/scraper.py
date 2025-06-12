@@ -99,6 +99,10 @@ class FinancialDataScraper:
         if urls is None:
             urls = [self.config.full_url]
             
+        # 去重URL，保持原始顺序
+        urls = list(dict.fromkeys(urls))
+        logger.info(f"Processing {len(urls)} unique URLs")
+            
         results = {}
         browser, page = self._setup_browser()
         
