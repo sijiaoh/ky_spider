@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import List, Dict
 
 from playwright.sync_api import sync_playwright, Browser, Page
@@ -15,6 +16,20 @@ class FinancialDataScraper:
     def __init__(self, config: ScrapingConfig):
         self.config = config
         
+    def _retry_operation(self, operation, operation_name: str, max_retries: int = 3, retry_delay: int = 2000):
+        """Execute operation with retry logic"""
+        for attempt in range(max_retries):
+            try:
+                operation()
+                return
+            except Exception as e:
+                logger.warning(f"{operation_name} attempt {attempt + 1} failed: {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed {operation_name} after {max_retries} attempts")
+                    raise RuntimeError(f"Failed {operation_name} after {max_retries} attempts")
+                # Wait before retry
+                time.sleep(retry_delay / 1000)
+        
     def _setup_browser(self) -> tuple[Browser, Page]:
         """Initialize browser and page"""
         playwright = sync_playwright().start()
@@ -30,14 +45,15 @@ class FinancialDataScraper:
         """Scrape all pages from a single URL"""
         html_pages = []
         
-        # Initial page load
-        logger.info(f"Loading initial page from {url}")
-        page.goto(url, wait_until='networkidle')
+        # Initial page load with retry
+        def load_page():
+            logger.info(f"Loading initial page from {url}")
+            page.goto(url, wait_until='networkidle')
+            logger.info("Waiting for table to load...")
+            page.wait_for_selector(".zyzb_table .report_table .table1", timeout=self.config.timeout)
+            logger.info("Table loaded successfully")
         
-        # Wait for table to be fully loaded
-        logger.info("Waiting for table to load...")
-        page.wait_for_selector(".zyzb_table .report_table .table1", timeout=self.config.timeout)
-        logger.info("Table loaded successfully")
+        self._retry_operation(load_page, f"page load for {url}")
         
         page_count = 0
         while True:
@@ -58,23 +74,22 @@ class FinancialDataScraper:
                 
             current_html = current_table.inner_html()
             
-            # Click next button
-            next_button.click()
+            # Click next button and wait for content update with retry
+            def navigate_next_page():
+                next_button.click()
+                page.wait_for_load_state('networkidle')
+                page.wait_for_function(
+                    """
+                    (oldHtml) => {
+                        const table = document.querySelector(".zyzb_table");
+                        return table && table.innerHTML !== oldHtml;
+                    }
+                    """,
+                    arg=current_html,
+                    timeout=self.config.timeout
+                )
             
-            # Wait for network requests to complete (if any)
-            page.wait_for_load_state('networkidle')
-            
-            # Wait for table to update (SPA content change)
-            page.wait_for_function(
-                """
-                (oldHtml) => {
-                    const table = document.querySelector(".zyzb_table");
-                    return table && table.innerHTML !== oldHtml;
-                }
-                """,
-                arg=current_html,
-                timeout=self.config.timeout
-            )
+            self._retry_operation(navigate_next_page, "pagination", max_retries=3, retry_delay=1000)
             page_count += 1
             
         return html_pages
