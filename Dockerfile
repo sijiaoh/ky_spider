@@ -9,16 +9,21 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制项目文件
-COPY . .
+# 安装uv包管理器
+RUN pip install uv
+
+# 复制依赖文件（优化缓存）
+COPY pyproject.toml uv.lock ./
 
 # 安装Python依赖
-RUN pip install uv
 RUN uv sync --frozen
 
 # 安装Playwright浏览器
 RUN uv run playwright install chromium
 RUN uv run playwright install-deps
+
+# 复制应用代码
+COPY . .
 
 # 创建输出目录
 RUN mkdir -p downloads
