@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>数据爬虫</title>
+    <meta charset="utf-8">
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        .container { max-width: 600px; }
+        textarea { width: 100%; height: 200px; margin: 10px 0; }
+        button { padding: 10px 20px; margin: 5px; }
+        .status { margin: 20px 0; padding: 10px; border-radius: 5px; }
+        .processing { background: #e3f2fd; }
+        .success { background: #e8f5e9; }
+        .error { background: #ffebee; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>数据爬虫工具</h1>
+        
+        <form id="form">
+            <label>输入URL（每行一个）:</label>
+            <textarea id="urls" placeholder="https://example1.com&#10;https://example2.com"></textarea>
+            <br>
+            <button type="submit">开始爬取</button>
+        </form>
+        
+        <div id="status" style="display:none"></div>
+    </div>
+
+    <script>
+        let taskId = null;
+        
+        document.getElementById('form').onsubmit = async function(e) {
+            e.preventDefault();
+            const urls = document.getElementById('urls').value.trim().split('\n').filter(u => u);
+            if (!urls.length) return alert('请输入URL');
+            
+            const response = await fetch('/scrape', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({urls})
+            });
+            
+            const result = await response.json();
+            if (result.task_id) {
+                taskId = result.task_id;
+                checkStatus();
+            }
+        };
+        
+        async function checkStatus() {
+            const status = document.getElementById('status');
+            status.style.display = 'block';
+            
+            const response = await fetch(`/status/${taskId}`);
+            const data = await response.json();
+            
+            if (data.status === 'processing') {
+                status.className = 'status processing';
+                status.innerHTML = '正在处理...';
+                setTimeout(checkStatus, 2000);
+            } else if (data.status === 'completed') {
+                status.className = 'status success';
+                status.innerHTML = `完成！<a href="/download/${taskId}" download>下载文件</a>`;
+            } else if (data.status === 'error') {
+                status.className = 'status error';
+                status.innerHTML = '错误: ' + data.error;
+            }
+        }
+    </script>
+</body>
+</html>
