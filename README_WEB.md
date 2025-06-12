@@ -13,7 +13,7 @@ playwright install
 python web_app.py
 ```
 
-访问：http://localhost:5000
+访问：http://localhost:8080
 
 ## 使用
 
@@ -22,8 +22,3 @@ python web_app.py
 3. 等待处理完成
 4. 点击下载链接获取Excel文件
 
-## 限制
-
-- 最多10个URL
-- 超时时间15秒
-- 文件保存在`downloads/`目录

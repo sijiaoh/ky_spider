@@ -31,7 +31,7 @@ def index():
 @app.route('/scrape', methods=['POST'])
 def scrape():
     urls = request.json.get('urls', [])
-    if not urls or len(urls) > 10:
+    if not urls or len(urls) > 20:
         return jsonify({'error': 'Invalid URLs'}), 400
     
     task_id = str(uuid.uuid4())[:8]
