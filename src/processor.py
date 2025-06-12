@@ -110,13 +110,13 @@ class FinancialDataProcessor:
                         except (ValueError, TypeError):
                             pass  # Will be handled below
                 
-                # If all conversion attempts failed, raise exception
+                # If all conversion attempts failed, keep original value
                 if converted_value is None:
-                    logger.error(f"Critical error: Failed to convert number '{cell_str}' at row {row_idx+1}, col {col_idx+1}")
-                    raise RuntimeError(f"Number conversion failed for '{cell_str}' - data integrity compromised")
-                
-                # Apply the converted value
-                converted_df.iloc[row_idx, col_idx] = converted_value
+                    logger.warning(f"Could not convert number '{cell_str}' at row {row_idx+1}, col {col_idx+1}, keeping original value")
+                    converted_df.iloc[row_idx, col_idx] = cell_value
+                else:
+                    # Apply the converted value
+                    converted_df.iloc[row_idx, col_idx] = converted_value
         
         return converted_df
     
