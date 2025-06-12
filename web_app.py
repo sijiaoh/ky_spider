@@ -4,7 +4,7 @@
 """
 
 import uuid
-import asyncio
+import threading
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify, send_file, render_template
@@ -36,12 +36,12 @@ def scrape():
     task_id = str(uuid.uuid4())[:8]
     tasks[task_id] = {'status': 'processing'}
     
-    # 异步处理
-    asyncio.create_task(process_urls(urls, task_id))
+    # 后台处理
+    threading.Thread(target=process_urls, args=(urls, task_id), daemon=True).start()
     
     return jsonify({'task_id': task_id})
 
-async def process_urls(urls, task_id):
+def process_urls(urls, task_id):
     try:
         # 创建输出文件名
         filename = f"data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -60,8 +60,8 @@ async def process_urls(urls, task_id):
         scraper = FinancialDataScraper(config)
         processor = FinancialDataProcessor(config)
         
-        scraped_data = await asyncio.to_thread(scraper.run, urls)
-        await asyncio.to_thread(processor.process_and_save_data, scraped_data)
+        scraped_data = scraper.run(urls)
+        processor.process_and_save_data(scraped_data)
         
         tasks[task_id] = {'status': 'completed', 'file': str(output_path)}
         
@@ -81,5 +81,5 @@ def download(task_id):
     return send_file(task['file'], as_attachment=True)
 
 if __name__ == '__main__':
-    print("启动服务: http://localhost:5000")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("启动服务: http://localhost:8080")
+    app.run(debug=True, host='0.0.0.0', port=8080)
