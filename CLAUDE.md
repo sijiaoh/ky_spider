@@ -64,8 +64,12 @@ playwright install
 
 ### Git 提交规范
 
-- git commit 命令中的 commit message 必须使用单引号，不允许使用双引号
+- **严格禁止**：git commit 命令中的 commit message 禁止使用双引号，只能使用单引号
+- **严格禁止**：git commit 命令中禁止使用 $() 语法
 - 使用 HEREDOC 格式确保正确处理多行提交信息
+- 示例正确格式：`git commit -m 'commit message'`
+- 示例错误格式：`git commit -m "commit message"` ❌ 禁止使用
+- 示例错误格式：`git commit -m '$(cat <<EOF...)'` ❌ 禁止使用
 
 ### 自我改进
 
@@ -98,3 +102,7 @@ playwright install
 
 ## 自我学习区
 <!-- Claude Code 在此记录新发现的项目模式和改进 -->
+
+### 学到的规则
+- Git commit 命令必须严格使用单引号，禁止双引号 - 违反此规则会被用户拒绝执行
+- Git commit 命令禁止使用 $() 语法 - 违反此规则会被用户拒绝执行

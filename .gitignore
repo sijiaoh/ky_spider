@@ -16,7 +16,6 @@ parts/
 sdist/
 var/
 wheels/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -36,7 +35,6 @@ venv.bak/
 .idea/
 *.swp
 *.swo
-*~
 
 # OS
 .DS_Store
@@ -47,21 +45,16 @@ venv.bak/
 ehthumbs.db
 Thumbs.db
 
-# Project specific
-*.xlsx
-*.xls
+# Logs
 *.log
 debug.log
 
-# Web app temporary files
-temp_uploads/
-temp_outputs/
-downloads/
+# Claude Code
+.claude/
 
-# Playwright
+# Project specific
+build/
+*.xlsx
+*.xls
 test-results/
 playwright-report/
-playwright/.cache/
-
-# uv
-.python-version
