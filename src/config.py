@@ -25,7 +25,32 @@ class ScrapingConfig:
     
     def __post_init__(self):
         if self.tables is None:
-            self.tables = [TableConfig()]
+            self.tables = [
+                TableConfig(
+                    button_selector=None,
+                    table_selector=".zyzb_table .report_table .table1",
+                    pagination_selector=".zyzb_table .next",
+                    table_container_selector=".zyzb_table",
+                ),
+                TableConfig(
+                    button_selector=None,
+                    table_selector="#report_zcfzb",
+                    pagination_selector=".zcfzb_table .next",
+                    table_container_selector=".zcfzb_table",
+                ),
+                TableConfig(
+                    button_selector=".cwbbTab ul li:nth-child(2)",
+                    table_selector="#report_lrb",
+                    pagination_selector=".lrb_table .next",
+                    table_container_selector=".lrb_table",
+                ),
+                TableConfig(
+                    button_selector=".cwbbTab ul li:nth-child(3)",
+                    table_selector="#report_xjllb",
+                    pagination_selector=".xjllb_table .next",
+                    table_container_selector=".xjllb_table",
+                ),
+            ]
     
     @property
     def full_url(self) -> str:
