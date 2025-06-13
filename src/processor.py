@@ -48,32 +48,49 @@ class FinancialDataProcessor:
         
         return df, page_title
     
-    def _split_dataframe_by_indicators(self, df: pd.DataFrame) -> List[pd.DataFrame]:
-        """Split dataframe by rows where first column ends with 指标"""
-        # Find rows where first column ends with 指标
-        first_col = df.iloc[:, 0].astype(str)
-        indicator_rows = first_col.str.endswith('指标')
-        indicator_indices = df.index[indicator_rows].tolist()
-        
-        if not indicator_indices:
-            # No indicator sections found, return whole dataframe
+    def _split_dataframe_by_selector(self, df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]) -> List[pd.DataFrame]:
+        """Split dataframe by TD selector"""
+        if not split_row_selector:
+            # No selector provided, return whole dataframe
             return [df]
+            
+        # Use TD selector method
+        soup = BeautifulSoup(html_content, "lxml")
+        split_tds = soup.select(split_row_selector)
         
-        indicator_dfs = []
+        if not split_tds:
+            # No matching TDs found, raise exception
+            logger.error(f"Critical error: No elements found with selector '{split_row_selector}'")
+            raise RuntimeError(f"Split row selector '{split_row_selector}' found no matching elements in HTML")
+            
+        # Find corresponding row indices by matching TD content
+        split_indices = []
+        for td in split_tds:
+            td_text = td.get_text(strip=True)
+            # Find rows in dataframe that contain this TD text in first column
+            first_col = df.iloc[:, 0].astype(str)
+            matching_rows = first_col.str.contains(td_text, regex=False, na=False)
+            if matching_rows.any():
+                split_indices.extend(df.index[matching_rows].tolist())
         
-        for i, start_idx in enumerate(indicator_indices):
-            if i < len(indicator_indices) - 1:
-                # Section from current indicator to next indicator (exclusive)
-                end_idx = indicator_indices[i + 1]
+        if not split_indices:
+            # No matching rows found, raise exception
+            logger.error(f"Critical error: Elements found with selector '{split_row_selector}' but no matching rows in dataframe")
+            raise RuntimeError(f"Split row selector '{split_row_selector}' found elements but no matching rows in table data")
+            
+        split_indices = sorted(list(set(split_indices)))  # Remove duplicates and sort
+        
+        split_dfs = []
+        for i, start_idx in enumerate(split_indices):
+            if i < len(split_indices) - 1:
+                end_idx = split_indices[i + 1]
                 section_df = df.iloc[start_idx:end_idx].copy()
             else:
-                # Last section: from current indicator to end of dataframe
                 section_df = df.iloc[start_idx:].copy()
-            
-            indicator_dfs.append(section_df)
+            split_dfs.append(section_df)
         
-        logger.info(f"Split dataframe into {len(indicator_dfs)} indicator sections")
-        return indicator_dfs
+        logger.info(f"Split dataframe into {len(split_dfs)} sections using TD selector")
+        return split_dfs
     
     def _convert_chinese_numbers(self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert Chinese number formats to pure numbers using cn2an"""
@@ -236,16 +253,18 @@ class FinancialDataProcessor:
                 # Combine pages horizontally for this table
                 table_combined_df = pd.concat(page_tables, axis=1, ignore_index=True)
                 
-                # Split the table's combined data by indicator sections
-                indicator_sections = self._split_dataframe_by_indicators(table_combined_df)
+                # Split the table's combined data by TD selector
+                # Get the original HTML content for selector matching
+                combined_html = ''.join(html_pages)
+                sections = self._split_dataframe_by_selector(table_combined_df, combined_html, table_config.split_row_selector)
                 
                 # Convert Chinese numbers in each section
                 converted_sections = []
-                for section in indicator_sections:
+                for section in sections:
                     converted_section = self._convert_chinese_numbers(section)
                     converted_sections.append(converted_section)
                 
-                # Recombine the converted indicator sections for this table
+                # Recombine the converted sections for this table
                 table_combined_df = pd.concat(converted_sections, axis=0, ignore_index=True)
                 
                 if not table_combined_df.empty:
