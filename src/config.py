@@ -1,5 +1,15 @@
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List, Optional
+
+
+@dataclass
+class TableConfig:
+    """Configuration for a single table extraction"""
+    button_selector: Optional[str] = None
+    table_selector: str = ".zyzb_table .report_table .table1"
+    pagination_selector: str = ".zyzb_table .next"
+    table_container_selector: str = ".zyzb_table"
 
 
 @dataclass
@@ -11,6 +21,11 @@ class ScrapingConfig:
     output_filename: str = "zyzb_table.xlsx"
     headless: bool = True
     timeout: int = 10000
+    tables: List[TableConfig] = None
+    
+    def __post_init__(self):
+        if self.tables is None:
+            self.tables = [TableConfig()]
     
     @property
     def full_url(self) -> str:

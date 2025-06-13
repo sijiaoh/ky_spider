@@ -7,7 +7,7 @@ import pandas as pd
 from io import StringIO
 import cn2an
 
-from .config import ScrapingConfig
+from .config import ScrapingConfig, TableConfig
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class FinancialDataProcessor:
     def __init__(self, config: ScrapingConfig):
         self.config = config
         
-    def _extract_page_data(self, html_content: str, page_index: int) -> tuple[pd.DataFrame, str]:
+    def _extract_page_data(self, html_content: str, page_index: int, table_config: TableConfig) -> tuple[pd.DataFrame, str]:
         """Extract table data and title from HTML content"""
         soup = BeautifulSoup(html_content, "lxml")
         
@@ -31,12 +31,12 @@ class FinancialDataProcessor:
         page_title = title.text.strip()
         logger.info(f"Processing page {page_index}: {page_title}")
         
-        zyzb_table = soup.select_one(".zyzb_table .report_table .table1")
-        if not zyzb_table:
-            logger.error(f"Critical error: No table found on page {page_index}")
+        table_element = soup.select_one(table_config.table_selector)
+        if not table_element:
+            logger.error(f"Critical error: No table found on page {page_index} with selector {table_config.table_selector}")
             raise RuntimeError(f"Table not found on page {page_index} - data integrity compromised")
         
-        df = pd.read_html(StringIO(str(zyzb_table)))[0]
+        df = pd.read_html(StringIO(str(table_element)))[0]
         
         if df.empty:
             logger.error(f"Critical error: Empty table data on page {page_index}")
@@ -197,52 +197,78 @@ class FinancialDataProcessor:
         logger.info(f"Merged {processed_url_count} URL dataframes with date alignment")
         return result_df
     
-    def process_and_save_data(self, scraped_data: Dict[str, List[str]]) -> None:
+    def process_and_save_data(self, scraped_data: Dict[str, Dict[str, List[str]]]) -> None:
         """Process scraped HTML data and save to Excel"""
         self.config.output_dir.mkdir(exist_ok=True)
         
         all_url_data = []
         
         # Process each URL's data
-        for url, html_pages in scraped_data.items():
-            if not html_pages:
+        for url, table_data in scraped_data.items():
+            if not table_data:
                 logger.error(f"Critical error: No data to process for {url}")
                 raise RuntimeError(f"No data available for processing from {url}")
             
             logger.info(f"Processing data from {url}")
-            page_tables = []
+            url_tables = []
             
-            # Process each page within the URL
-            page_title = None
-            for i, html_content in enumerate(html_pages):
-                df, title = self._extract_page_data(html_content, i)
-                if page_title is None:
-                    page_title = title
-                page_tables.append(df)
+            # Process each table within the URL
+            for table_name, html_pages in table_data.items():
+                if not html_pages:
+                    logger.warning(f"No pages for table {table_name} in {url}")
+                    continue
+                    
+                logger.info(f"Processing table {table_name} from {url}")
+                page_tables = []
+                page_title = None
+                
+                # Get table config for this table
+                table_index = int(table_name.split('_')[1])
+                table_config = self.config.tables[table_index]
+                
+                # Process each page within the table
+                for i, html_content in enumerate(html_pages):
+                    df, title = self._extract_page_data(html_content, i, table_config)
+                    if page_title is None:
+                        page_title = title
+                    page_tables.append(df)
+                
+                # Combine pages horizontally for this table
+                table_combined_df = pd.concat(page_tables, axis=1, ignore_index=True)
+                
+                # Split the table's combined data by indicator sections
+                indicator_sections = self._split_dataframe_by_indicators(table_combined_df)
+                
+                # Convert Chinese numbers in each section
+                converted_sections = []
+                for section in indicator_sections:
+                    converted_section = self._convert_chinese_numbers(section)
+                    converted_sections.append(converted_section)
+                
+                # Recombine the converted indicator sections for this table
+                table_combined_df = pd.concat(converted_sections, axis=0, ignore_index=True)
+                
+                if not table_combined_df.empty:
+                    # Add table identifier column
+                    table_combined_df.insert(0, 'Table', table_name)
+                    url_tables.append(table_combined_df)
+                    logger.info(f"Processed {len(page_tables)} pages for table {table_name}")
             
-            # Combine pages horizontally for this URL
-            url_combined_df = pd.concat(page_tables, axis=1, ignore_index=True)
-            
-            # Split the URL's combined data by indicator sections
-            indicator_sections = self._split_dataframe_by_indicators(url_combined_df)
-            
-            # Convert Chinese numbers in each section
-            converted_sections = []
-            for section in indicator_sections:
-                converted_section = self._convert_chinese_numbers(section)
-                converted_sections.append(converted_section)
-            
-            # Recombine the converted indicator sections for this URL
-            url_combined_df = pd.concat(converted_sections, axis=0, ignore_index=True)
-            
-            if url_combined_df.empty:
-                logger.error(f"Critical error: Combined dataframe is empty for {url}")
-                raise RuntimeError(f"Final dataframe is empty for {url}")
-            
-            # Add Title identifier column instead of URL
-            url_combined_df.insert(0, 'Title', page_title)
-            all_url_data.append(url_combined_df)
-            logger.info(f"Processed {len(page_tables)} pages from {url} with title: {page_title}")
+            # Combine all tables from this URL vertically
+            if url_tables:
+                url_combined_df = pd.concat(url_tables, axis=0, ignore_index=True)
+                
+                if url_combined_df.empty:
+                    logger.error(f"Critical error: Combined dataframe is empty for {url}")
+                    raise RuntimeError(f"Final dataframe is empty for {url}")
+                
+                # Add Title identifier column
+                url_combined_df.insert(0, 'Title', page_title if 'page_title' in locals() else url)
+                all_url_data.append(url_combined_df)
+                logger.info(f"Combined {len(url_tables)} tables from {url}")
+            else:
+                logger.error(f"Critical error: No valid tables processed for {url}")
+                raise RuntimeError(f"No valid tables processed for {url}")
         
         # Combine all URLs with date alignment
         if not all_url_data:
