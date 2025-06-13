@@ -62,6 +62,11 @@ playwright install
 - 需要时用`uv add`加载.不要直接编辑project.toml
 - 避免使用GitHub Star少的库
 
+### Git 提交规范
+
+- git commit 命令中的 commit message 必须使用单引号，不允许使用双引号
+- 使用 HEREDOC 格式确保正确处理多行提交信息
+
 ### 自我改进
 
 - 意识到指令中包含今后也需要注意的事情时,记录到自我学习区里自我改进
