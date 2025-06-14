@@ -43,15 +43,15 @@ class FinancialDataProcessor:
             logger.error(f"Critical error: Empty table data on page {page_index}")
             raise RuntimeError(f"Empty table data on page {page_index} - data integrity compromised")
         
-        # Remove first column for non-first pages to avoid duplication
-        if page_index > 0:
-            df = df.iloc[:, 1:]
-        
         table = Table(
             data=df,
             name=f"page_{page_index}",
             source=page_title
         )
+        
+        # Remove first column for non-first pages to avoid duplication
+        if page_index > 0:
+            table.remove_first_column()
         
         return table, page_title
     
@@ -243,7 +243,7 @@ class FinancialDataProcessor:
                     continue
                     
                 logger.info(f"Processing table {table_name} from {url}")
-                page_tables = []
+                page_dataframes = []
                 page_title = None
                 
                 # Get table config for this table
@@ -255,37 +255,30 @@ class FinancialDataProcessor:
                     table, title = self._extract_page_data(html_content, i, table_config)
                     if page_title is None:
                         page_title = title
-                    page_tables.append(table.data)
+                    page_dataframes.append(table.data)
                 
                 # Combine pages horizontally for this table
-                table_combined_df = pd.concat(page_tables, axis=1, ignore_index=True)
+                combined_df = pd.concat(page_dataframes, axis=1, ignore_index=True)
                 
                 # Split the table's combined data by TD selector
-                # Get the original HTML content for selector matching
                 combined_html = ''.join(html_pages)
-                sections = self._split_dataframe_by_selector(table_combined_df, combined_html, table_config.split_row_selector)
+                sections = self._split_dataframe_by_selector(combined_df, combined_html, table_config.split_row_selector)
                 
-                # Convert Chinese numbers in each section
-                converted_sections = []
-                for section in sections:
-                    converted_section = self._convert_chinese_numbers(section)
-                    converted_sections.append(converted_section)
+                # Convert Chinese numbers in each section and recombine
+                converted_sections = [self._convert_chinese_numbers(section) for section in sections]
+                final_df = pd.concat(converted_sections, axis=0, ignore_index=True)
                 
-                # Recombine the converted sections for this table
-                table_combined_df = pd.concat(converted_sections, axis=0, ignore_index=True)
+                # Create Table object for this processed table
+                processed_table = Table(
+                    data=final_df,
+                    name=table_name,
+                    source=url
+                )
                 
-                if not table_combined_df.empty:
-                    # Add table identifier column
-                    table_combined_df.insert(0, 'Table', table_name)
-                    
-                    # Create Table object for this processed table
-                    processed_table = Table(
-                        data=table_combined_df,
-                        name=table_name,
-                        source=url
-                    )
-                    url_table_objects.append(processed_table)
-                    logger.info(f"Processed {len(page_tables)} pages for table {table_name}")
+                # Add table identifier column
+                processed_table.insert_column(0, 'Table', table_name)
+                url_table_objects.append(processed_table)
+                logger.info(f"Processed {len(page_dataframes)} pages for table {table_name}")
             
             # Create FinancialTable for this URL
             if url_table_objects:
@@ -309,16 +302,12 @@ class FinancialDataProcessor:
         # Extract combined dataframes from FinancialTable objects for merging
         url_dataframes = []
         for financial_table in financial_tables:
-            # Combine all table data from this FinancialTable
-            table_dataframes = [table.data for table in financial_table.tables]
-            url_combined_df = pd.concat(table_dataframes, axis=0, ignore_index=True)
+            url_combined_df = financial_table.get_combined_dataframe()
             
             if url_combined_df.empty:
                 logger.error(f"Critical error: Combined dataframe is empty for {financial_table.title}")
                 raise RuntimeError(f"Final dataframe is empty for {financial_table.title}")
             
-            # Add Title identifier column
-            url_combined_df.insert(0, 'Title', financial_table.title)
             url_dataframes.append(url_combined_df)
         
         final_df = self._merge_by_date_alignment(url_dataframes)
