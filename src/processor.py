@@ -8,6 +8,7 @@ from io import StringIO
 import cn2an
 
 from .config import ScrapingConfig, TableConfig
+from .table import Table, FinancialTable
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,7 @@ class FinancialDataProcessor:
     def __init__(self, config: ScrapingConfig):
         self.config = config
         
-    def _extract_page_data(self, html_content: str, page_index: int, table_config: TableConfig) -> tuple[pd.DataFrame, str]:
+    def _extract_page_data(self, html_content: str, page_index: int, table_config: TableConfig) -> tuple[Table, str]:
         """Extract table data and title from HTML content"""
         soup = BeautifulSoup(html_content, "lxml")
         
@@ -46,7 +47,13 @@ class FinancialDataProcessor:
         if page_index > 0:
             df = df.iloc[:, 1:]
         
-        return df, page_title
+        table = Table(
+            data=df,
+            name=f"page_{page_index}",
+            source=page_title
+        )
+        
+        return table, page_title
     
     def _split_dataframe_by_selector(self, df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]) -> List[pd.DataFrame]:
         """Split dataframe by TD selector"""
@@ -218,7 +225,7 @@ class FinancialDataProcessor:
         """Process scraped HTML data and save to Excel"""
         self.config.output_dir.mkdir(exist_ok=True)
         
-        all_url_data = []
+        financial_tables = []
         
         # Process each URL's data
         for url, table_data in scraped_data.items():
@@ -227,7 +234,7 @@ class FinancialDataProcessor:
                 raise RuntimeError(f"No data available for processing from {url}")
             
             logger.info(f"Processing data from {url}")
-            url_tables = []
+            url_table_objects = []
             
             # Process each table within the URL
             for table_name, html_pages in table_data.items():
@@ -245,10 +252,10 @@ class FinancialDataProcessor:
                 
                 # Process each page within the table
                 for i, html_content in enumerate(html_pages):
-                    df, title = self._extract_page_data(html_content, i, table_config)
+                    table, title = self._extract_page_data(html_content, i, table_config)
                     if page_title is None:
                         page_title = title
-                    page_tables.append(df)
+                    page_tables.append(table.data)
                 
                 # Combine pages horizontally for this table
                 table_combined_df = pd.concat(page_tables, axis=1, ignore_index=True)
@@ -270,31 +277,51 @@ class FinancialDataProcessor:
                 if not table_combined_df.empty:
                     # Add table identifier column
                     table_combined_df.insert(0, 'Table', table_name)
-                    url_tables.append(table_combined_df)
+                    
+                    # Create Table object for this processed table
+                    processed_table = Table(
+                        data=table_combined_df,
+                        name=table_name,
+                        source=url
+                    )
+                    url_table_objects.append(processed_table)
                     logger.info(f"Processed {len(page_tables)} pages for table {table_name}")
             
-            # Combine all tables from this URL vertically
-            if url_tables:
-                url_combined_df = pd.concat(url_tables, axis=0, ignore_index=True)
-                
-                if url_combined_df.empty:
-                    logger.error(f"Critical error: Combined dataframe is empty for {url}")
-                    raise RuntimeError(f"Final dataframe is empty for {url}")
-                
-                # Add Title identifier column
-                url_combined_df.insert(0, 'Title', page_title if 'page_title' in locals() else url)
-                all_url_data.append(url_combined_df)
-                logger.info(f"Combined {len(url_tables)} tables from {url}")
+            # Create FinancialTable for this URL
+            if url_table_objects:
+                # Create FinancialTable object
+                financial_table = FinancialTable(
+                    tables=url_table_objects,
+                    title=page_title,
+                    stock_code=self.config.stock_code
+                )
+                financial_tables.append(financial_table)
+                logger.info(f"Combined {len(url_table_objects)} tables from {url}")
             else:
                 logger.error(f"Critical error: No valid tables processed for {url}")
                 raise RuntimeError(f"No valid tables processed for {url}")
         
         # Combine all URLs with date alignment
-        if not all_url_data:
+        if not financial_tables:
             logger.error("Critical error: No data from any URL")
             raise RuntimeError("No data available from any URL")
         
-        final_df = self._merge_by_date_alignment(all_url_data)
+        # Extract combined dataframes from FinancialTable objects for merging
+        url_dataframes = []
+        for financial_table in financial_tables:
+            # Combine all table data from this FinancialTable
+            table_dataframes = [table.data for table in financial_table.tables]
+            url_combined_df = pd.concat(table_dataframes, axis=0, ignore_index=True)
+            
+            if url_combined_df.empty:
+                logger.error(f"Critical error: Combined dataframe is empty for {financial_table.title}")
+                raise RuntimeError(f"Final dataframe is empty for {financial_table.title}")
+            
+            # Add Title identifier column
+            url_combined_df.insert(0, 'Title', financial_table.title)
+            url_dataframes.append(url_combined_df)
+        
+        final_df = self._merge_by_date_alignment(url_dataframes)
         
         if final_df.empty:
             logger.error("Critical error: Final combined dataframe is empty")
@@ -302,7 +329,7 @@ class FinancialDataProcessor:
         
         # Save to Excel
         final_df.to_excel(self.config.output_path, index=False)
-        logger.info(f"Combined data from {len(scraped_data)} URLs saved to {self.config.output_path}")
+        logger.info(f"Combined data from {len(financial_tables)} URLs saved to {self.config.output_path}")
         
         # Verify file was created and has content
         if not self.config.output_path.exists():
