@@ -93,51 +93,6 @@ class FinancialDataProcessor:
         logger.info(f"Split dataframe into {len(split_dfs)} sections using TD selector")
         return split_dfs
     
-    def _convert_chinese_numbers(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Convert Chinese number formats to pure numbers using cn2an"""
-        # Process data starting from row 2, column 2 (inclusive)
-        converted_df = df.copy()
-        
-        for row_idx in range(1, len(df)):  # Start from row 2 (index 1)
-            for col_idx in range(1, len(df.columns)):  # Start from column 2 (index 1)
-                cell_value = df.iloc[row_idx, col_idx]
-                
-                if pd.isna(cell_value):
-                    continue
-                
-                cell_str = str(cell_value).strip()
-                if not cell_str:
-                    continue
-                
-                # Skip non-data indicators
-                if cell_str == "--":
-                    continue
-                
-                converted_value = None
-                
-                # Try cn2an first for standard Chinese number formats
-                try:
-                    converted_value = cn2an.cn2an(cell_str, "smart")
-                except (ValueError, TypeError):
-                    # If cn2an fails, try handling 万亿 directly
-                    if '万亿' in cell_str:
-                        try:
-                            base_part = cell_str.replace('万亿', '')
-                            base_num = float(base_part)
-                            converted_value = base_num * 1000000000000  # 1万亿 = 10^12
-                        except (ValueError, TypeError):
-                            pass  # Will be handled below
-                
-                # If all conversion attempts failed, keep original value
-                if converted_value is None:
-                    logger.warning(f"Could not convert number '{cell_str}' at row {row_idx+1}, col {col_idx+1}, keeping original value")
-                    converted_df.iloc[row_idx, col_idx] = cell_value
-                else:
-                    # Apply the converted value
-                    converted_df.iloc[row_idx, col_idx] = converted_value
-        
-        return converted_df
-    
     def _merge_by_date_alignment(self, url_dataframes: List[pd.DataFrame]) -> pd.DataFrame:
         """Merge dataframes from different URLs by aligning date columns"""
         if len(url_dataframes) == 1:
@@ -258,20 +213,18 @@ class FinancialDataProcessor:
                 combined_html = ''.join(html_pages)
                 sections = self._split_dataframe_by_selector(combined_df, combined_html, table_config.split_row_selector)
                 
-                # Convert Chinese numbers in each section and recombine
-                converted_sections = [self._convert_chinese_numbers(section) for section in sections]
-                final_df = pd.concat(converted_sections, axis=0, ignore_index=True)
-                
                 # Create Table object for this processed table
-                processed_table = Table(
-                    data=final_df,
+                table = Table(
                     name=table_name,
                     source=url
                 )
+
+                for section in sections:
+                    table.append_page_data(section)
                 
                 # Add table identifier column
-                processed_table.insert_column(0, 'Table', table_name)
-                url_table_objects.append(processed_table)
+                table.insert_column(0, 'Table', table_name)
+                url_table_objects.append(table)
                 logger.info(f"Processed {len(page_dataframes)} pages for table {table_name}")
             
             # Create FinancialTable for this URL
