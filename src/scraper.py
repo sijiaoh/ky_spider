@@ -38,8 +38,23 @@ class FinancialDataScraper:
         page.set_default_timeout(self.config.timeout)
         return browser, page
     
-    
-    
+    def _extract_table_name_from_button(self, page: Page, button_selector: str) -> str:
+        """Extract table name from button text"""
+        if not button_selector:
+            logger.error(f"Critical error: No button selector provided")
+            raise RuntimeError("Button selector is required for table name extraction")
+        
+        button_element = page.query_selector(button_selector)
+        if not button_element:
+            logger.error(f"Critical error: No button found with selector '{button_selector}'")
+            raise RuntimeError(f"Button element not found with selector '{button_selector}' - table name extraction failed")
+        
+        button_text = button_element.text_content()
+        if not button_text or not button_text.strip():
+            logger.error(f"Critical error: Button found but has no text with selector '{button_selector}'")
+            raise RuntimeError(f"Button element has no text with selector '{button_selector}' - table name extraction failed")
+        
+        return button_text.strip()
     
     def _scrape_single_table(self, page: Page, table_config: TableConfig) -> List[str]:
         """Scrape all pages from a single table configuration"""
@@ -117,7 +132,8 @@ class FinancialDataScraper:
         
         table_results = {}
         for i, table_config in enumerate(self.config.tables):
-            table_name = f"table_{i}"
+            # Extract table name from button text
+            table_name = self._extract_table_name_from_button(page, table_config.button_selector)
             logger.info(f"Processing {table_name} with selector: {table_config.table_selector}")
             
             try:

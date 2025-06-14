@@ -28,14 +28,14 @@ class ScrapingConfig:
         if self.tables is None:
             self.tables = [
                 TableConfig(
-                    button_selector=None,
+                    button_selector=".zyzb .title",
                     table_selector=".zyzb_table .report_table .table1",
                     pagination_selector=".zyzb_table .next",
                     table_container_selector=".zyzb_table",
                     split_row_selector=".zyzb_table .report_table .table1 .title td:nth-child(1)",
                 ),
                 TableConfig(
-                    button_selector=None,
+                    button_selector=".cwbbTab ul li:nth-child(1)",
                     table_selector="#report_zcfzb",
                     pagination_selector=".zcfzb_table .next",
                     table_container_selector=".zcfzb_table",

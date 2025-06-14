@@ -186,18 +186,17 @@ class FinancialDataProcessor:
             url_table_objects = []
             
             # Process each table within the URL
-            for table_name, html_pages in table_data.items():
+            for table_index, (table_name, html_pages) in enumerate(table_data.items()):
                 if not html_pages:
                     logger.warning(f"No pages for table {table_name} in {url}")
                     continue
                     
-                logger.info(f"Processing table {table_name} from {url}")
                 page_dataframes = []
                 page_title = None
                 
-                # Get table config for this table
-                table_index = int(table_name.split('_')[1])
+                # Get table config by index (scraper maintains table order)
                 table_config = self.config.tables[table_index]
+                logger.info(f"Processing table {table_name} from {url}")
                 
                 # Process each page within the table
                 for i, html_content in enumerate(html_pages):
