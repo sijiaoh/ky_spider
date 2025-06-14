@@ -20,7 +20,7 @@ class FinancialDataProcessor:
     def __init__(self, config: ScrapingConfig):
         self.config = config
         
-    def _extract_page_data(self, html_content: str, page_index: int, table_config: TableConfig) -> tuple[Table, str]:
+    def _extract_page_data(self, html_content: str, page_index: int, table_config: TableConfig) -> tuple[pd.DataFrame, str]:
         """Extract table data and title from HTML content"""
         soup = BeautifulSoup(html_content, "lxml")
         
@@ -43,17 +43,11 @@ class FinancialDataProcessor:
             logger.error(f"Critical error: Empty table data on page {page_index}")
             raise RuntimeError(f"Empty table data on page {page_index} - data integrity compromised")
         
-        table = Table(
-            data=df,
-            name=f"page_{page_index}",
-            source=page_title
-        )
-        
         # Remove first column for non-first pages to avoid duplication
         if page_index > 0:
-            table.remove_first_column()
+            df = df.iloc[:, 1:]
         
-        return table, page_title
+        return df, page_title
     
     def _split_dataframe_by_selector(self, df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]) -> List[pd.DataFrame]:
         """Split dataframe by TD selector"""
@@ -252,10 +246,10 @@ class FinancialDataProcessor:
                 
                 # Process each page within the table
                 for i, html_content in enumerate(html_pages):
-                    table, title = self._extract_page_data(html_content, i, table_config)
+                    df, title = self._extract_page_data(html_content, i, table_config)
                     if page_title is None:
                         page_title = title
-                    page_dataframes.append(table.data)
+                    page_dataframes.append(df)
                 
                 # Combine pages horizontally for this table
                 combined_df = pd.concat(page_dataframes, axis=1, ignore_index=True)
