@@ -32,28 +32,28 @@ class ScrapingConfig:
                     table_selector=".zyzb_table .report_table .table1",
                     pagination_selector=".zyzb_table .next",
                     table_container_selector=".zyzb_table",
-                    split_row_selector=".title",
+                    split_row_selector=".zyzb_table .report_table .table1 .title td:nth-child(1)",
                 ),
                 TableConfig(
                     button_selector=None,
                     table_selector="#report_zcfzb",
                     pagination_selector=".zcfzb_table .next",
                     table_container_selector=".zcfzb_table",
-                    split_row_selector=".tips-fieldname-Left",
+                    split_row_selector="#report_zcfzb .tips-fieldname-Left",
                 ),
                 TableConfig(
                     button_selector=".cwbbTab ul li:nth-child(2)",
                     table_selector="#report_lrb",
                     pagination_selector=".lrb_table .next",
                     table_container_selector=".lrb_table",
-                    split_row_selector=".tips-fieldname-Left",
+                    split_row_selector="#report_lrb .tips-fieldname-Left",
                 ),
                 TableConfig(
                     button_selector=".cwbbTab ul li:nth-child(3)",
                     table_selector="#report_xjllb",
                     pagination_selector=".xjllb_table .next",
                     table_container_selector=".xjllb_table",
-                    split_row_selector=".tips-fieldname-Left",
+                    split_row_selector="#report_xjllb .tips-fieldname-Left",
                 ),
             ]
     

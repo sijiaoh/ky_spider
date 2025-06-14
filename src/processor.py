@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pathlib import Path
 
 from bs4 import BeautifulSoup
