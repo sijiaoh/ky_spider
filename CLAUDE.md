@@ -50,6 +50,7 @@ playwright install
 - 配置类在 `src/config.py`
 - 主要逻辑在 `src/scraper.py`
 - 数据处理在 `src/processor.py`
+- 数据容器在 `src/table.py`
 
 ### 调试参数
 
@@ -99,6 +100,7 @@ playwright install
 - 模块化设计：配置、爬虫、数据处理分离
 - uv 包管理器提供快速依赖解析
 - 支持直接URL输入和股票代码转换两种模式
+- 面向对象数据结构：Table和FinancialTable类管理表格数据
 
 ## 自我学习区
 <!-- Claude Code 在此记录新发现的项目模式和改进 -->
@@ -106,3 +108,10 @@ playwright install
 ### 学到的规则
 - Git commit 命令必须严格使用单引号，禁止双引号 - 违反此规则会被用户拒绝执行
 - Git commit 命令禁止使用 $() 语法 - 违反此规则会被用户拒绝执行
+- commit前必须运行git diff查看变更，以便生成准确的commit message
+
+### 数据结构设计
+- Table类：管理单个表格数据，包含名称、来源和DataFrame
+- FinancialTable类：管理多个Table的集合，代表完整的金融数据
+- 表格名称使用实际按钮文本而非索引，提高可读性
+- 数据处理时保持层次结构：页面数据 → Table → FinancialTable → 最终输出
