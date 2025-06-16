@@ -21,7 +21,7 @@ class ScrapingConfig:
     output_dir: Path = Path("build")
     output_filename: str = "zyzb_table.xlsx"
     headless: bool = True
-    timeout: int = 10000
+    timeout: int = 30000
     tables: List[TableConfig] = None
     
     def __post_init__(self):
