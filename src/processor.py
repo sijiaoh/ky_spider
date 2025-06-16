@@ -49,50 +49,6 @@ class FinancialDataProcessor:
         
         return df, page_title
     
-    def _split_dataframe_by_selector(self, df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]) -> List[pd.DataFrame]:
-        """Split dataframe by TD selector"""
-        if not split_row_selector:
-            # No selector provided, return whole dataframe
-            return [df]
-            
-        # Use TD selector method
-        soup = BeautifulSoup(html_content, "lxml")
-        split_tds = soup.select(split_row_selector)
-        
-        if not split_tds:
-            # No matching TDs found, raise exception
-            logger.error(f"Critical error: No elements found with selector '{split_row_selector}'")
-            raise RuntimeError(f"Split row selector '{split_row_selector}' found no matching elements in HTML")
-            
-        # Find corresponding row indices by matching TD content
-        split_indices = []
-        for td in split_tds:
-            td_text = td.get_text(strip=True)
-            # Find rows in dataframe that contain this TD text in first column
-            first_col = df.iloc[:, 0].astype(str)
-            matching_rows = first_col.str.contains(td_text, regex=False, na=False)
-            if matching_rows.any():
-                split_indices.extend(df.index[matching_rows].tolist())
-        
-        if not split_indices:
-            # No matching rows found, raise exception
-            logger.error(f"Critical error: Elements found with selector '{split_row_selector}' but no matching rows in dataframe")
-            raise RuntimeError(f"Split row selector '{split_row_selector}' found elements but no matching rows in table data")
-            
-        split_indices = sorted(list(set(split_indices)))  # Remove duplicates and sort
-        
-        split_dfs = []
-        for i, start_idx in enumerate(split_indices):
-            if i < len(split_indices) - 1:
-                end_idx = split_indices[i + 1]
-                section_df = df.iloc[start_idx:end_idx].copy()
-            else:
-                section_df = df.iloc[start_idx:].copy()
-            split_dfs.append(section_df)
-        
-        logger.info(f"Split dataframe into {len(split_dfs)} sections using TD selector")
-        return split_dfs
-    
     def _merge_by_date_alignment(self, url_dataframes: List[pd.DataFrame]) -> pd.DataFrame:
         """Merge dataframes from different URLs by aligning date columns"""
         if len(url_dataframes) == 1:
@@ -208,18 +164,15 @@ class FinancialDataProcessor:
                 # Combine pages horizontally for this table
                 combined_df = pd.concat(page_dataframes, axis=1, ignore_index=True)
                 
-                # Split the table's combined data by TD selector
-                combined_html = ''.join(html_pages)
-                sections = self._split_dataframe_by_selector(combined_df, combined_html, table_config.split_row_selector)
-                
-                # Create Table object for this processed table
+                # Create Table object and let it handle data splitting and loading
                 table = Table(
                     name=table_name,
                     source=url
                 )
-
-                for section in sections:
-                    table.append_page_data(section)
+                
+                # Let table handle splitting and loading data
+                combined_html = ''.join(html_pages)
+                table.split_and_load_data(combined_df, combined_html, table_config.split_row_selector)
                 
                 # Add table identifier column
                 table.insert_column(0, 'Table', table_name)

@@ -35,6 +35,58 @@ class Table:
     def is_empty(self) -> bool:
         """检查表格是否为空"""
         return self.data.empty
+    
+    def split_and_load_data(self, combined_df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]):
+        """Split combined dataframe by selector and load sections into table"""
+        sections = self._split_dataframe_by_selector(combined_df, html_content, split_row_selector)
+        
+        for section in sections:
+            self.append_page_data(section)
+    
+    def _split_dataframe_by_selector(self, df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]) -> List[pd.DataFrame]:
+        """Split dataframe by TD selector"""
+        if not split_row_selector:
+            # No selector provided, return whole dataframe
+            return [df]
+            
+        # Use TD selector method
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(html_content, "lxml")
+        split_tds = soup.select(split_row_selector)
+        
+        if not split_tds:
+            # No matching TDs found, raise exception
+            logger.error(f"Critical error: No elements found with selector '{split_row_selector}'")
+            raise RuntimeError(f"Split row selector '{split_row_selector}' found no matching elements in HTML")
+            
+        # Find corresponding row indices by matching TD content
+        split_indices = []
+        for td in split_tds:
+            td_text = td.get_text(strip=True)
+            # Find rows in dataframe that contain this TD text in first column
+            first_col = df.iloc[:, 0].astype(str)
+            matching_rows = first_col.str.contains(td_text, regex=False, na=False)
+            if matching_rows.any():
+                split_indices.extend(df.index[matching_rows].tolist())
+        
+        if not split_indices:
+            # No matching rows found, raise exception
+            logger.error(f"Critical error: Elements found with selector '{split_row_selector}' but no matching rows in dataframe")
+            raise RuntimeError(f"Split row selector '{split_row_selector}' found elements but no matching rows in table data")
+            
+        split_indices = sorted(list(set(split_indices)))  # Remove duplicates and sort
+        
+        split_dfs = []
+        for i, start_idx in enumerate(split_indices):
+            if i < len(split_indices) - 1:
+                end_idx = split_indices[i + 1]
+                section_df = df.iloc[start_idx:end_idx].copy()
+            else:
+                section_df = df.iloc[start_idx:].copy()
+            split_dfs.append(section_df)
+        
+        logger.info(f"Split dataframe into {len(split_dfs)} sections using TD selector")
+        return split_dfs
 
     def _convert_chinese_numbers(self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert Chinese number formats to pure numbers using cn2an"""
