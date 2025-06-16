@@ -38,10 +38,10 @@ class Table:
 
     def _convert_chinese_numbers(self, df: pd.DataFrame) -> pd.DataFrame:
         """Convert Chinese number formats to pure numbers using cn2an"""
-        # Process data starting from row 2, column 2 (inclusive)
+        # Process data starting from row 1, column 2 (inclusive)
         converted_df = df.copy()
         
-        for row_idx in range(1, len(df)):  # Start from row 2 (index 1)
+        for row_idx in range(0, len(df)):  # Start from row 1 (index 0)
             for col_idx in range(1, len(df.columns)):  # Start from column 2 (index 1)
                 cell_value = df.iloc[row_idx, col_idx]
                 
