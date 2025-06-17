@@ -36,12 +36,25 @@ class Table:
         """检查表格是否为空"""
         return self.data.empty
     
-    def split_and_load_data(self, combined_df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]):
-        """Split combined dataframe by selector and load sections into table"""
+    def load_from_pages(self, page_dataframes: List[pd.DataFrame], html_content: str, split_row_selector: Optional[str]):
+        """Load table data from multiple page dataframes"""
+        # Combine pages horizontally
+        combined_df = self._merge_page_dataframes(page_dataframes)
+        
+        # Split and load sections
         sections = self._split_dataframe_by_selector(combined_df, html_content, split_row_selector)
         
         for section in sections:
             self.append_page_data(section)
+    
+    def _merge_page_dataframes(self, page_dataframes: List[pd.DataFrame]) -> pd.DataFrame:
+        """Merge multiple page dataframes horizontally"""
+        if len(page_dataframes) == 1:
+            return page_dataframes[0]
+        
+        # Combine pages horizontally (first column duplication already handled)
+        combined_df = pd.concat(page_dataframes, axis=1, ignore_index=True)
+        return combined_df
     
     def _split_dataframe_by_selector(self, df: pd.DataFrame, html_content: str, split_row_selector: Optional[str]) -> List[pd.DataFrame]:
         """Split dataframe by TD selector"""

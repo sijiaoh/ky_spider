@@ -161,18 +161,15 @@ class FinancialDataProcessor:
                         page_title = title
                     page_dataframes.append(df)
                 
-                # Combine pages horizontally for this table
-                combined_df = pd.concat(page_dataframes, axis=1, ignore_index=True)
-                
-                # Create Table object and let it handle data splitting and loading
+                # Create Table object and let it handle page merging and data loading
                 table = Table(
                     name=table_name,
                     source=url
                 )
                 
-                # Let table handle splitting and loading data
+                # Let table handle page merging, splitting and loading data
                 combined_html = ''.join(html_pages)
-                table.split_and_load_data(combined_df, combined_html, table_config.split_row_selector)
+                table.load_from_pages(page_dataframes, combined_html, table_config.split_row_selector)
                 
                 # Add table identifier column
                 table.insert_column(0, 'Table', table_name)
