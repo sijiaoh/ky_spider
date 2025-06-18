@@ -1,8 +1,11 @@
 from dataclasses import dataclass, field
+from bs4 import BeautifulSoup
+from io import StringIO
 from typing import List, Optional
 import logging
 import pandas as pd
 import cn2an
+from .config import TableConfig
 
 
 logger = logging.getLogger(__name__)
@@ -11,9 +14,28 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Table:
     """基础表格数据容器"""
+    name: str
+    source: str
+    config: TableConfig
+    html_pages: List[str]
+
+    page_dataframes: List[pd.DataFrame] = field(default_factory=list)
+    page_title: Optional[str] = None
+
     data: pd.DataFrame = field(default_factory=pd.DataFrame)
-    name: Optional[str] = None
-    source: Optional[str] = None
+
+    def __post_init__(self):
+        # Process each page
+        for i, html_content in enumerate(self.html_pages):
+            df, title = self._extract_page_data(html_content, i, self.config)
+            if self.page_title is None:
+                self.page_title = title
+            self.page_dataframes.append(df)
+
+
+        # Let handle page merging, splitting and loading data
+        combined_html = ''.join(self.html_pages)
+        self._load_from_pages(self.page_dataframes, combined_html, self.config.split_row_selector)
     
     def insert_column(self, loc: int, column: str, value, allow_duplicates: bool = False):
         """在指定位置插入列"""
@@ -35,8 +57,37 @@ class Table:
     def is_empty(self) -> bool:
         """检查表格是否为空"""
         return self.data.empty
+        
+    def _extract_page_data(self, html_content: str, page_index: int, table_config: TableConfig) -> tuple[pd.DataFrame, str]:
+        """Extract table data and title from HTML content"""
+        soup = BeautifulSoup(html_content, "lxml")
+        
+        title = soup.select_one("title")
+        if not title or not title.text.strip():
+            logger.error(f"Critical error: No title found on page {page_index}")
+            raise RuntimeError(f"Page title not found on page {page_index} - data integrity compromised")
+        
+        page_title = title.text.strip()
+        logger.info(f"Processing page {page_index}: {page_title}")
+        
+        table_element = soup.select_one(table_config.table_selector)
+        if not table_element:
+            logger.error(f"Critical error: No table found on page {page_index} with selector {table_config.table_selector}")
+            raise RuntimeError(f"Table not found on page {page_index} - data integrity compromised")
+        
+        df = pd.read_html(StringIO(str(table_element)))[0]
+        
+        if df.empty:
+            logger.error(f"Critical error: Empty table data on page {page_index}")
+            raise RuntimeError(f"Empty table data on page {page_index} - data integrity compromised")
+        
+        # Remove first column for non-first pages to avoid duplication
+        if page_index > 0:
+            df = df.iloc[:, 1:]
+        
+        return df, page_title
     
-    def load_from_pages(self, page_dataframes: List[pd.DataFrame], html_content: str, split_row_selector: Optional[str]):
+    def _load_from_pages(self, page_dataframes: List[pd.DataFrame], html_content: str, split_row_selector: Optional[str]):
         """Load table data from multiple page dataframes"""
         # Combine pages horizontally
         combined_df = self._merge_page_dataframes(page_dataframes)

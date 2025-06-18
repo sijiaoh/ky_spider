@@ -19,35 +19,6 @@ class FinancialDataProcessor:
     
     def __init__(self, config: ScrapingConfig):
         self.config = config
-        
-    def _extract_page_data(self, html_content: str, page_index: int, table_config: TableConfig) -> tuple[pd.DataFrame, str]:
-        """Extract table data and title from HTML content"""
-        soup = BeautifulSoup(html_content, "lxml")
-        
-        title = soup.select_one("title")
-        if not title or not title.text.strip():
-            logger.error(f"Critical error: No title found on page {page_index}")
-            raise RuntimeError(f"Page title not found on page {page_index} - data integrity compromised")
-        
-        page_title = title.text.strip()
-        logger.info(f"Processing page {page_index}: {page_title}")
-        
-        table_element = soup.select_one(table_config.table_selector)
-        if not table_element:
-            logger.error(f"Critical error: No table found on page {page_index} with selector {table_config.table_selector}")
-            raise RuntimeError(f"Table not found on page {page_index} - data integrity compromised")
-        
-        df = pd.read_html(StringIO(str(table_element)))[0]
-        
-        if df.empty:
-            logger.error(f"Critical error: Empty table data on page {page_index}")
-            raise RuntimeError(f"Empty table data on page {page_index} - data integrity compromised")
-        
-        # Remove first column for non-first pages to avoid duplication
-        if page_index > 0:
-            df = df.iloc[:, 1:]
-        
-        return df, page_title
     
     def _merge_by_date_alignment(self, url_dataframes: List[pd.DataFrame]) -> pd.DataFrame:
         """Merge dataframes from different URLs by aligning date columns"""
@@ -146,42 +117,30 @@ class FinancialDataProcessor:
                 if not html_pages:
                     logger.warning(f"No pages for table {table_name} in {url}")
                     continue
-                    
-                page_dataframes = []
-                page_title = None
                 
                 # Get table config by index (scraper maintains table order)
                 table_config = self.config.tables[table_index]
                 logger.info(f"Processing table {table_name} from {url}")
                 
-                # Process each page within the table
-                for i, html_content in enumerate(html_pages):
-                    df, title = self._extract_page_data(html_content, i, table_config)
-                    if page_title is None:
-                        page_title = title
-                    page_dataframes.append(df)
-                
                 # Create Table object and let it handle page merging and data loading
                 table = Table(
                     name=table_name,
-                    source=url
+                    source=url,
+                    config=table_config,
+                    html_pages=html_pages
                 )
-                
-                # Let table handle page merging, splitting and loading data
-                combined_html = ''.join(html_pages)
-                table.load_from_pages(page_dataframes, combined_html, table_config.split_row_selector)
                 
                 # Add table identifier column
                 table.insert_column(0, 'Table', table_name)
                 url_table_objects.append(table)
-                logger.info(f"Processed {len(page_dataframes)} pages for table {table_name}")
+                logger.info(f"Processed {len(table.page_dataframes)} pages for table {table_name}")
             
             # Create FinancialTable for this URL
             if url_table_objects:
                 # Create FinancialTable object
                 financial_table = FinancialTable(
                     tables=url_table_objects,
-                    title=page_title,
+                    title=table.page_title,
                     stock_code=self.config.stock_code
                 )
                 financial_tables.append(financial_table)
